@@ -503,7 +503,7 @@
             <div class="btn-group">
                 <button class="btn btn-primary" onclick="runSatelliteScan()"><i class="fas fa-play"></i> <span id="startScan">Start Scan</span></button>
                 <button class="btn btn-outline" onclick="resetSatellite()"><i class="fas fa-undo"></i> <span id="resetBtn">Reset</span></button>
-                <button class="btn btn-success" id="liveSatBtn" onclick="toggleLiveSatellite()"><i class="fas fa-satellite-dish"></i> Live Satellite</button>
+                <button class="btn btn-success" id="liveSatBtn"><i class="fas fa-satellite-dish"></i> Live Satellite</button>
             </div>
         </div>
         <div class="card" style="margin-top:12px;">
@@ -1889,6 +1889,42 @@ if (typeof toggleLiveSatellite === 'undefined') {
     }
 }
 </script>
+<script>
+(function() {
+    let isLiveSatelliteRunning = false;
+
+    function safeToggle() {
+        if (isLiveSatelliteRunning) return;
+        isLiveSatelliteRunning = true;
+        // Call the original toggle function if it exists, otherwise the window one
+        if (typeof window.toggleLiveSatellite === 'function') {
+            window.toggleLiveSatellite();
+        } else if (typeof toggleLiveSatellite === 'function') {
+            toggleLiveSatellite();
+        }
+        // Release lock after a short delay
+        setTimeout(function() { isLiveSatelliteRunning = false; }, 500);
+    }
+
+    // Attach event listener to the button (only once)
+    document.addEventListener('DOMContentLoaded', function() {
+        const btn = document.getElementById('liveSatBtn');
+        if (btn) {
+            // Remove any existing listeners by cloning and replacing
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+            // Add our safe listener
+            newBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                safeToggle();
+            });
+            console.log('✅ Live Satellite button attached (safe mode)');
+        } else {
+            console.warn('⚠️ Live Satellite button not found');
+        }
+    });
+})();
+</script>
 </body>
 <!-- force build $(Get-Date -Format 'yyyyMMddHHmmss') -->
 </html>
@@ -1897,6 +1933,7 @@ if (typeof toggleLiveSatellite === 'undefined') {
 
 
 <!-- trigger redeploy -->
+
 
 
 
