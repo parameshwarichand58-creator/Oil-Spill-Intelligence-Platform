@@ -1791,6 +1791,104 @@ setTimeout(startAISStream, 3000);
 })();
 </script>
 <script src="map-enhancements.js"></script>
+<script>
+// Fallback: ensure satellite containers exist
+document.addEventListener('DOMContentLoaded', function() {
+    const satImg = document.getElementById('satImg');
+    if (!satImg) return;
+
+    // Check if containers already exist
+    if (!document.getElementById('satelliteMapContainer')) {
+        console.log('🔧 Creating satellite containers dynamically...');
+        // Remove the old content (just text and scan-line) but keep the satImg
+        // We'll wrap everything in a new structure
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'position:relative;width:100%;height:100%;';
+
+        const mapContainer = document.createElement('div');
+        mapContainer.id = 'satelliteMapContainer';
+        mapContainer.style.cssText = 'width:100%;height:100%;display:none;position:absolute;top:0;left:0;z-index:1;background:#05080f;';
+
+        const simDiv = document.createElement('div');
+        simDiv.id = 'satSimulation';
+        simDiv.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;position:relative;z-index:2;';
+        // Copy existing content (icon, scan-line, label) into simDiv
+        const existingContent = satImg.innerHTML;
+        simDiv.innerHTML = existingContent;
+
+        wrapper.appendChild(mapContainer);
+        wrapper.appendChild(simDiv);
+        satImg.innerHTML = '';
+        satImg.appendChild(wrapper);
+        satImg.style.position = 'relative';
+
+        console.log('✅ Satellite containers created.');
+    }
+});
+
+// The toggleLiveSatellite function (if missing, add it)
+if (typeof toggleLiveSatellite === 'undefined') {
+    console.log('🔧 Defining toggleLiveSatellite...');
+    let satelliteMapInstance = null;
+    let liveSatelliteEnabled = false;
+
+    window.toggleLiveSatellite = function() {
+        liveSatelliteEnabled = !liveSatelliteEnabled;
+        const simDiv = document.getElementById('satSimulation');
+        const mapContainer = document.getElementById('satelliteMapContainer');
+        const scanLabel = document.getElementById('scanLabel');
+
+        if (!simDiv || !mapContainer) {
+            showToast('Satellite view unavailable – containers still missing', 'error');
+            return;
+        }
+
+        if (liveSatelliteEnabled) {
+            simDiv.style.display = 'none';
+            mapContainer.style.display = 'block';
+            if (scanLabel) scanLabel.textContent = '🛰️ Live Satellite View (NASA GIBS)';
+            if (!satelliteMapInstance) {
+                initSatelliteMap();
+            } else {
+                satelliteMapInstance.invalidateSize();
+            }
+            showToast('Live satellite imagery enabled', 'success');
+        } else {
+            simDiv.style.display = 'flex';
+            mapContainer.style.display = 'none';
+            if (scanLabel) scanLabel.textContent = 'Press "Scan" to start';
+            showToast('Back to simulation mode', 'info');
+        }
+    };
+
+    function initSatelliteMap() {
+        const container = document.getElementById('satelliteMapContainer');
+        if (!container) return;
+        satelliteMapInstance = L.map(container, {
+            center: [22.41, 88.46],
+            zoom: 10,
+            zoomControl: false,
+            attributionControl: false
+        });
+        L.tileLayer('https://gibs-{s}.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/current/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg', {
+            subdomains: ['a','b','c','d'],
+            maxZoom: 12,
+            minZoom: 5,
+            attribution: 'NASA GIBS'
+        }).addTo(satelliteMapInstance);
+        L.marker([22.41, 88.46], {
+            icon: L.divIcon({ html: '🛢️', iconSize: [20,20], className: 'satellite-marker' })
+        }).addTo(satelliteMapInstance).bindPopup('Oil Spill Area');
+        L.circle([22.41, 88.46], {
+            color: '#ef4444',
+            fillColor: '#ef4444',
+            fillOpacity: 0.1,
+            radius: 5000
+        }).addTo(satelliteMapInstance);
+        setTimeout(() => { if (satelliteMapInstance) satelliteMapInstance.invalidateSize(); }, 300);
+    }
+}
+</script>
 </body>
 <!-- force build $(Get-Date -Format 'yyyyMMddHHmmss') -->
 </html>
@@ -1799,6 +1897,7 @@ setTimeout(startAISStream, 3000);
 
 
 <!-- trigger redeploy -->
+
 
 
 
