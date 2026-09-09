@@ -1,0 +1,19 @@
+{
+  "name": "ocean-eye",
+  "version": "2.0.0",
+  "description": "OCEAN EYE - Oil Spill Intelligence Platform",
+  "main": "public/index.html",
+  "scripts": {
+    "dev": "cd public && python -m http.server 5173 --bind localhost",
+    "deploy": "vercel --prod"
+  },
+  "keywords": [
+    "oil-spill",
+    "monitoring",
+    "real-time",
+    "google-auth",
+    "leaflet"
+  ],
+  "author": "Parameshwari Chand",
+  "license": "MIT"
+}

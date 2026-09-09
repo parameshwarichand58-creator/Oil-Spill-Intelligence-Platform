@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Auth Test</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        body {
+            background: #05080f;
+            color: #e8edf5;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            flex-direction: column;
+        }
+        .container {
+            background: rgba(255,255,255,0.05);
+            padding: 40px;
+            border-radius: 12px;
+            border: 1px solid rgba(74,158,255,0.2);
+            text-align: center;
+        }
+        h1 { color: #4a9eff; }
+        #result { margin-top: 20px; }
+        .success {
+            background: rgba(0,212,170,0.1);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #00d4aa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛰️ Google Auth Test</h1>
+        <p>Click the button below to sign in</p>
+        
+        <div id="g_id_onload"
+             data-client_id="473174759246-doseohpdtm14ekdr51t7d7fr43pev6gk.apps.googleusercontent.com"
+             data-callback="handleCredentialResponse"
+             data-auto_prompt="false"
+             data-context="signin">
+        </div>
+        
+        <div class="g_id_signin"
+             data-type="standard"
+             data-size="large"
+             data-theme="dark"
+             data-text="signin_with"
+             data-shape="rectangular"
+             data-logo_alignment="left"
+             data-width="250">
+        </div>
+        
+        <div id="result"></div>
+        
+        <p style="margin-top:20px;font-size:12px;color:#64748b;">Using Client ID: 473174759246-doseohpdtm14ekdr51t7d7fr43pev6gk</p>
+    </div>
+
+    <script>
+        function handleCredentialResponse(response) {
+            try {
+                console.log('Response received:', response);
+                const payload = JSON.parse(atob(response.credential.split('.')[1]));
+                console.log('User payload:', payload);
+                
+                document.getElementById('result').innerHTML = `
+                    <div class="success">
+                        <h2 style="color:#00d4aa;">✅ Login Successful!</h2>
+                        <p><strong>Name:</strong> ${payload.name}</p>
+                        <p><strong>Email:</strong> ${payload.email}</p>
+                        <p><strong>Email Verified:</strong> ${payload.email_verified ? '✅ Yes' : '❌ No'}</p>
+                        <img src="${payload.picture}" style="border-radius:50%;width:50px;height:50px;border:2px solid #4a9eff;margin-top:10px;">
+                        <p style="font-size:10px;color:#64748b;margin-top:10px;">Sub: ${payload.sub}</p>
+                    </div>
+                `;
+                
+                // Store user info
+                const user = {
+                    name: payload.name,
+                    email: payload.email,
+                    avatar: payload.picture
+                };
+                localStorage.setItem('oilSpillUser', JSON.stringify(user));
+                console.log('✅ User saved:', user);
+                
+            } catch(e) {
+                console.error('Error:', e);
+                document.getElementById('result').innerHTML = `
+                    <div style="background:rgba(239,68,68,0.1);padding:20px;border-radius:8px;border:1px solid #ef4444;">
+                        <h2 style="color:#ef4444;">❌ Error</h2>
+                        <p>${e.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Initialize Google Sign-In
+        window.onload = function() {
+            console.log('✅ Page loaded');
+            console.log('Client ID:', '473174759246-doseohpdtm14ekdr51t7d7fr43pev6gk.apps.googleusercontent.com');
+            
+            if (typeof google !== 'undefined' && google.accounts) {
+                console.log('✅ Google API loaded');
+            } else {
+                console.log('⏳ Waiting for Google API...');
+            }
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Auth Test</title>
+    <meta charset="UTF-8">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        body {
+            background: #05080f;
+            color: #e8edf5;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            flex-direction: column;
+            margin: 0;
+        }
+        .container {
+            background: rgba(255,255,255,0.05);
+            padding: 40px;
+            border-radius: 16px;
+            border: 1px solid rgba(74,158,255,0.2);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+        }
+        h1 { color: #4a9eff; font-size: 28px; }
+        .subtitle { color: #94a3b8; font-size: 14px; margin-bottom: 20px; }
+        .info { 
+            background: rgba(74,158,255,0.05); 
+            padding: 10px 15px; 
+            border-radius: 8px; 
+            font-size: 12px; 
+            color: #94a3b8;
+            margin: 10px 0;
+            word-break: break-all;
+        }
+        .info strong { color: #e2e8f0; }
+        .success { 
+            background: rgba(0,212,170,0.1); 
+            padding: 20px; 
+            border-radius: 8px; 
+            border: 1px solid #00d4aa; 
+            margin-top: 20px;
+            text-align: left;
+        }
+        .success h2 { color: #00d4aa; margin-top: 0; }
+        .error { 
+            background: rgba(239,68,68,0.1); 
+            padding: 20px; 
+            border-radius: 8px; 
+            border: 1px solid #ef4444; 
+            margin-top: 20px;
+        }
+        .error h2 { color: #ef4444; margin-top: 0; }
+        .g_id_signin { display: flex; justify-content: center; margin: 15px 0; }
+        .footer { font-size: 10px; color: #64748b; margin-top: 20px; }
+        .badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 100px;
+            font-size: 10px;
+            font-weight: 600;
+            margin: 5px 0;
+        }
+        .badge.success { background: rgba(0,212,170,0.1); color: #00d4aa; border: 1px solid rgba(0,212,170,0.1); }
+        .badge.error { background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.1); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛰️ Google Auth Test</h1>
+        <p class="subtitle">Testing OAuth 2.0 Configuration</p>
+        
+        <div class="info">
+            <strong>📍 Origin:</strong> <span id="originDisplay">Loading...</span>
+        </div>
+        <div class="info">
+            <strong>🔗 URL:</strong> <span id="urlDisplay">Loading...</span>
+        </div>
+        <div class="info">
+            <strong>📱 Client ID:</strong> <span id="clientDisplay">473174759246-doseohpdtm14ekdr51t7d7fr43pev6gk</span>
+        </div>
+        
+        <div id="statusBadge">
+            <span class="badge error">⏳ Waiting for Google API...</span>
+        </div>
+
+        <div id="g_id_onload"
+             data-client_id="473174759246-doseohpdtm14ekdr51t7d7fr43pev6gk.apps.googleusercontent.com"
+             data-callback="handleCredentialResponse"
+             data-auto_prompt="false"
+             data-context="signin">
+        </div>
+        
+        <div class="g_id_signin"
+             data-type="standard"
+             data-size="large"
+             data-theme="dark"
+             data-text="signin_with"
+             data-shape="rectangular"
+             data-logo_alignment="left"
+             data-width="250">
+        </div>
+        
+        <div id="result"></div>
+        
+        <div class="footer">
+            <p>If you see this page, the server is running correctly.</p>
+            <p>Click the Google button above to test authentication.</p>
+        </div>
+    </div>
+
+    <script>
+        // Display current origin and URL
+        document.getElementById('originDisplay').textContent = window.location.origin;
+        document.getElementById('urlDisplay').textContent = window.location.href;
+        
+        // Update status when Google API loads
+        function updateStatus(message, type) {
+            const badge = document.getElementById('statusBadge');
+            if (type === 'success') {
+                badge.innerHTML = <span class="badge success">✅ </span>;
+            } else {
+                badge.innerHTML = <span class="badge error"></span>;
+            }
+        }
+        
+        function handleCredentialResponse(response) {
+            try {
+                console.log('✅ Response received');
+                console.log('Response:', response);
+                
+                // Decode the JWT
+                const payload = JSON.parse(atob(response.credential.split('.')[1]));
+                console.log('User payload:', payload);
+                
+                document.getElementById('result').innerHTML = 
+                    <div class="success">
+                        <h2>✅ Login Successful!</h2>
+                        <p><strong>Name:</strong> </p>
+                        <p><strong>Email:</strong> </p>
+                        <p><strong>Email Verified:</strong> </p>
+                        <img src="" style="border-radius:50%;width:50px;height:50px;border:2px solid #4a9eff;margin-top:10px;">
+                        <p style="font-size:10px;color:#64748b;margin-top:10px;"><strong>User ID:</strong> </p>
+                    </div>
+                ;
+                
+                // Save user to localStorage
+                const user = {
+                    name: payload.name,
+                    email: payload.email,
+                    avatar: payload.picture,
+                    sub: payload.sub
+                };
+                localStorage.setItem('oilSpillUser', JSON.stringify(user));
+                
+                updateStatus('Authentication Successful!', 'success');
+                
+            } catch(e) {
+                console.error('❌ Error:', e);
+                console.error('Error details:', e.message);
+                
+                document.getElementById('result').innerHTML = 
+                    <div class="error">
+                        <h2>❌ Login Failed</h2>
+                        <p><strong>Error:</strong> </p>
+                        <p style="font-size:12px;color:#94a3b8;">Check the console (F12) for more details.</p>
+                    </div>
+                ;
+                
+                updateStatus('Authentication Failed - Check Console', 'error');
+            }
+        }
+
+        // Check if Google API is loaded
+        function checkGoogleAPI() {
+            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                console.log('✅ Google API loaded successfully');
+                updateStatus('Google API Ready', 'success');
+                return true;
+            } else {
+                console.log('⏳ Waiting for Google API...');
+                updateStatus('⏳ Loading Google API...', 'error');
+                return false;
+            }
+        }
+
+        // Try to initialize if Google API is available
+        function initializeGoogle() {
+            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                try {
+                    // The button will be rendered automatically
+                    console.log('✅ Google Sign-In initialized');
+                    updateStatus('✅ Ready - Click the button', 'success');
+                } catch(e) {
+                    console.error('❌ Initialization error:', e);
+                    updateStatus('❌ Error: ' + e.message, 'error');
+                }
+            }
+        }
+
+        // Wait for the page to load
+        window.onload = function() {
+            console.log('🚀 Page loaded');
+            console.log('📍 Origin:', window.location.origin);
+            console.log('📍 URL:', window.location.href);
+            console.log('📱 Client ID: 473174759246-doseohpdtm14ekdr51t7d7fr43pev6gk');
+            
+            // Check if Google API is loaded
+            setTimeout(function() {
+                if (checkGoogleAPI()) {
+                    initializeGoogle();
+                } else {
+                    // Try again after 2 seconds
+                    setTimeout(function() {
+                        if (checkGoogleAPI()) {
+                            initializeGoogle();
+                        } else {
+                            updateStatus('⚠️ Google API not loaded - Refresh the page', 'error');
+                            console.warn('⚠️ Google API failed to load. Check your internet connection.');
+                        }
+                    }, 2000);
+                }
+            }, 1000);
+            
+            // Log helpful information
+            console.log('💡 If you see an origin_mismatch error:');
+            console.log('💡 Make sure you are using: http://localhost:5173');
+            console.log('💡 Add this origin to Google Cloud Console:');
+            console.log('💡 http://localhost:5173');
+            console.log('💡 http://127.0.0.1:5173');
+        };
+    </script>
+</body>
+</html>
