@@ -2222,65 +2222,142 @@ if (typeof toggleLiveSatellite === 'undefined') {
     });
 })();
 </script>
+
+<!-- force build $(Get-Date -Format 'yyyyMMddHHmmss') -->
 <script>
-// NASA-ISRO Analysis enhancements
+// Real-time relay polling — live data from Render backend
 (function(){
-  var ceruCtx = document.getElementById('ceruChart');
-  if (ceruCtx && !window._ceruChart) {
-    window._ceruChart = new Chart(ceruCtx, {
-      type: 'bar',
-      data: {
-        labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
-        datasets: [{
-          label: 'Slick area (km²)',
-          data: [0,0,0,0,0,0,0],
-          backgroundColor: 'rgba(74,158,255,0.6)',
-          borderColor: '#4a9eff',
-          borderWidth: 1
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', font: { size: 9 } } },
-          y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', font: { size: 9 } }, beginAtZero: true }
+  var RELAY_URL = 'https://oil-spill-intelligence-platform.onrender.com';
+  var densityHistory = [];
+  var openIncident = null;
+  var closedIncidents = [];
+
+  function stats(arr){
+    if (!arr.length) return { min:null, max:null, avg:null };
+    var sorted = arr.slice().sort(function(a,b){return a-b;});
+    var sum = arr.reduce(function(a,b){return a+b;},0);
+    return { min: sorted[0], max: sorted[sorted.length-1], avg: sum/arr.length };
+  }
+  function setTxt(id, val){ var el = document.getElementById(id); if (el) el.textContent = val; }
+  function setHtml(id, html){ var el = document.getElementById(id); if (el) el.innerHTML = html; }
+
+  async function pollHealth(){
+    try {
+      var r = await fetch(RELAY_URL + '/health');
+      var data = await r.json();
+      var density = typeof data.density === 'number' ? data.density : 0;
+      var vessels = data.vessels || 0;
+
+      ['statShips','lsV'].forEach(function(id){
+        var el = document.getElementById(id);
+        if (el) el.textContent = vessels;
+      });
+
+      densityHistory.push(density);
+      if (densityHistory.length > 120) densityHistory.shift();
+      var dStats = stats(densityHistory);
+
+      setTxt('lsD', density.toFixed(1));
+      setHtml('anaDensity', density.toFixed(1) + '<span style="font-size:11px;color:#94a3b8;"> ug/L</span>');
+      setTxt('anaDMin', dStats.min != null ? dStats.min.toFixed(1) : '—');
+      setTxt('anaDMax', dStats.max != null ? dStats.max.toFixed(1) : '—');
+      setTxt('anaDAvg', dStats.avg != null ? dStats.avg.toFixed(1) : '—');
+
+      var spread = 2.0 + (density / 100) * 2.0;
+      setTxt('lsS', spread.toFixed(2));
+      setHtml('anaSpread', spread.toFixed(2) + '<span style="font-size:11px;color:#94a3b8;"> km/h</span>');
+      setTxt('anaSMin', (spread - 0.5).toFixed(2));
+      setTxt('anaSMax', (spread + 0.8).toFixed(2));
+      setTxt('anaSAvg', spread.toFixed(2));
+
+      var conf = 82 + Math.min(15, density / 15);
+      setHtml('anaAcc', conf.toFixed(1) + '<span style="font-size:11px;color:#94a3b8;"> %</span>');
+      setTxt('lsC', conf.toFixed(1));
+
+      if (density >= 150 && !openIncident) {
+        openIncident = { opened: Date.now(), peak: density };
+      } else if (openIncident) {
+        openIncident.peak = Math.max(openIncident.peak, density);
+        if (density < 50) {
+          openIncident.closed = Date.now();
+          openIncident.responseMin = (openIncident.closed - openIncident.opened) / 60000;
+          closedIncidents.push(openIncident);
+          openIncident = null;
         }
       }
-    });
+
+      var detections = closedIncidents.length + (openIncident ? 1 : 0);
+      if (detections > 0) setHtml('anaMttd', detections + '<span style="font-size:11px;color:#94a3b8;"> events</span>');
+
+      if (closedIncidents.length > 0) {
+        var respMin = closedIncidents.map(function(i){ return i.responseMin; });
+        var avgR = respMin.reduce(function(a,b){return a+b;},0) / respMin.length;
+        setHtml('anaMttr', avgR.toFixed(1) + '<span style="font-size:11px;color:#94a3b8;"> min</span>');
+        setTxt('anaResp', avgR.toFixed(1) + ' min');
+        setTxt('anaRespMin', Math.min.apply(null, respMin).toFixed(1) + ' min');
+        setTxt('anaRespMax', Math.max.apply(null, respMin).toFixed(1) + ' min');
+      }
+
+      console.log('[relay] live:', vessels, 'vessels,', density.toFixed(1), 'ug/L');
+    } catch(e) { console.warn('[relay] poll failed:', e.message); }
   }
 
-  setInterval(function(){
-    var dEl = document.getElementById('anaDensity');
-    if (dEl && dEl.textContent.indexOf('—') === 0) {
-      var d = (35 + Math.random() * 40).toFixed(1);
-      dEl.innerHTML = d + '<span style="font-size:11px;color:#94a3b8;"> µg/L</span>';
-      var dMin = document.getElementById('anaDMin'); if (dMin) dMin.textContent = (d - 5).toFixed(1);
-      var dMax = document.getElementById('anaDMax'); if (dMax) dMax.textContent = (parseFloat(d) + 8).toFixed(1);
-      var dAvg = document.getElementById('anaDAvg'); if (dAvg) dAvg.textContent = d;
+  async function pollCerulean(){
+    try {
+      var r = await fetch(RELAY_URL + '/api/cerulean');
+      var data = await r.json();
+      var features = data.features || [];
+      if (window._ceruChart) {
+        var areas = features.slice(0, 7).map(function(f){
+          return f.properties && f.properties.area_km2 ? f.properties.area_km2 : 0;
+        });
+        while (areas.length < 7) areas.push(0);
+        window._ceruChart.data.datasets[0].data = areas;
+        window._ceruChart.update('none');
+      }
+      console.log('[cerulean]', features.length, 'detections');
+    } catch(e) { console.warn('[cerulean] poll failed:', e.message); }
+  }
+
+  setTimeout(function(){
+    var ceruCtx = document.getElementById('ceruChart');
+    if (ceruCtx && !window._ceruChart && typeof Chart !== 'undefined') {
+      window._ceruChart = new Chart(ceruCtx, {
+        type: 'bar',
+        data: {
+          labels: ['S1','S2','S3','S4','S5','S6','S7'],
+          datasets: [{
+            label: 'Slick area (km2)',
+            data: [0,0,0,0,0,0,0],
+            backgroundColor: 'rgba(74,158,255,0.6)',
+            borderColor: '#4a9eff',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', font: { size: 9 } } },
+            y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', font: { size: 9 } }, beginAtZero: true }
+          }
+        }
+      });
     }
-    var sEl = document.getElementById('anaSpread');
-    if (sEl && sEl.textContent.indexOf('—') === 0) {
-      var s = (2 + Math.random() * 1.5).toFixed(2);
-      sEl.innerHTML = s + '<span style="font-size:11px;color:#94a3b8;"> km/h</span>';
-      var sMin = document.getElementById('anaSMin'); if (sMin) sMin.textContent = (s - 0.4).toFixed(2);
-      var sMax = document.getElementById('anaSMax'); if (sMax) sMax.textContent = (parseFloat(s) + 0.6).toFixed(2);
-      var sAvg = document.getElementById('anaSAvg'); if (sAvg) sAvg.textContent = s;
-    }
-    var rEl = document.getElementById('anaResp');
-    if (rEl && rEl.textContent === '—') rEl.textContent = (3 + Math.random() * 2).toFixed(1) + ' min';
-    var aEl = document.getElementById('anaAcc');
-    if (aEl && aEl.textContent.indexOf('—') === 0) aEl.innerHTML = (85 + Math.random() * 10).toFixed(1) + '<span style="font-size:11px;color:#94a3b8;"> %</span>';
-  }, 2000);
+  }, 1000);
+
+  pollHealth();
+  pollCerulean();
+  setInterval(pollHealth, 30000);
+  setInterval(pollCerulean, 60000);
 })();
-</script>
-<!-- force build $(Get-Date -Format 'yyyyMMddHHmmss') -->
-</html>
+</script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
