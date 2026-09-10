@@ -4974,12 +4974,301 @@ body { padding-right: 0 !important; }
 
   console.log('[image-analysis] v2 armed');
 })();
+</script><script id="strict-scenarios">
+// Strict 6-scenario image detector
+(function(){
+  function analyze(img){
+    var c = document.createElement('canvas');
+    var maxDim = 320;
+    var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    c.width = Math.max(1, Math.floor(img.width * scale));
+    c.height = Math.max(1, Math.floor(img.height * scale));
+    var ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    var data = ctx.getImageData(0, 0, c.width, c.height).data;
+    var total = c.width * c.height;
+
+    var blue=0, dark=0, skin=0, white=0, orange=0, black=0;
+    var blueMap = new Uint8Array(total);
+    var darkMap = new Uint8Array(total);
+    var orangeMap = new Uint8Array(total);
+
+    for (var i = 0; i < data.length; i += 4){
+      var r=data[i], g=data[i+1], b=data[i+2];
+      var mx=Math.max(r,g,b), mn=Math.min(r,g,b);
+      var lum = r*0.299 + g*0.587 + b*0.114;
+      var px = i/4;
+
+      if (b>80 && b>r*1.1 && b>g*1.02 && lum>25 && lum<220){ blue++; blueMap[px]=1; }
+      if (lum<75 && mx<115){ dark++; darkMap[px]=1; if(lum<30) black++; }
+      if (r>95 && g>40 && b>20 && r>g && r>b && (mx-mn)>15 && Math.abs(r-g)>15) skin++;
+      if (lum>215 && (mx-mn)<30) white++;
+      if (r>180 && g>60 && g<190 && b<110 && r>g*1.25){ orange++; orangeMap[px]=1; }
+    }
+    return { width:c.width, height:c.height, total:total,
+      blueMap:blueMap, darkMap:darkMap, orangeMap:orangeMap,
+      bluePct: blue/total, darkPct: dark/total, skinPct: skin/total,
+      whitePct: white/total, orangePct: orange/total };
+  }
+
+  function findBlobs(s){
+    var w=s.width, h=s.height, seen=new Uint8Array(w*h), out=[];
+    function flood(sx,sy){
+      var stack=[[sx,sy]], px=[];
+      while (stack.length){
+        var p=stack.pop(), x=p[0], y=p[1];
+        if (x<0||x>=w||y<0||y>=h) continue;
+        var i=y*w+x;
+        if (seen[i]||!s.darkMap[i]) continue;
+        seen[i]=1; px.push([x,y]);
+        stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+      }
+      return px;
+    }
+    for (var y=0;y<h;y++) for (var x=0;x<w;x++){
+      var i=y*w+x;
+      if (s.darkMap[i] && !seen[i]){
+        var p = flood(x,y);
+        if (p.length >= 50){
+          var mnX=w,mxX=0,mnY=h,mxY=0;
+          for (var k=0;k<p.length;k++){
+            if (p[k][0]<mnX) mnX=p[k][0];
+            if (p[k][0]>mxX) mxX=p[k][0];
+            if (p[k][1]<mnY) mnY=p[k][1];
+            if (p[k][1]>mxY) mxY=p[k][1];
+          }
+          var bw=mxX-mnX, bh=mxY-mnY;
+          var aspect = bw/Math.max(1,bh);
+          var density = p.length/Math.max(1,bw*bh);
+          if (aspect>1.25 && density>0.28){
+            out.push({ cx:(mnX+mxX)/2, cy:(mnY+mxY)/2, w:bw, h:bh, area:p.length });
+          }
+        }
+      }
+    }
+    return out.sort(function(a,b){return b.area-a.area;});
+  }
+
+  function detectOil(s){
+    var w=s.width, h=s.height, n=0;
+    for (var y=3;y<h-3;y++) for (var x=3;x<w-3;x++){
+      var i=y*w+x;
+      if (!s.darkMap[i]) continue;
+      var wn=0;
+      for (var dy=-3;dy<=3;dy++) for (var dx=-3;dx<=3;dx++){
+        if (!dx && !dy) continue;
+        var nx=x+dx, ny=y+dy;
+        if (nx<0||nx>=w||ny<0||ny>=h) continue;
+        if (s.blueMap[ny*w+nx]) wn++;
+      }
+      if (wn >= 8) n++;
+    }
+    var r = n/s.total;
+    return { detected: r > 0.005, coverage: r };
+  }
+
+  function detectFire(s){
+    var n=0;
+    for (var i=0;i<s.orangeMap.length;i++) if (s.orangeMap[i]) n++;
+    var r = n/s.total;
+    return { detected: r > 0.002, coverage: r };
+  }
+
+  function classify(img){
+    var s = analyze(img);
+    var wp = s.bluePct;
+    var v = findBlobs(s);
+    var o = detectOil(s);
+    var f = detectFire(s);
+
+    // Non-maritime pre-filters
+    if (s.skinPct > 0.15 && wp < 0.08){
+      return { accepted:false, kind:'selfie',
+        reason:'Person detected. No vessel or water body identified — not a maritime incident.' };
+    }
+    if (s.whitePct > 0.6 && wp < 0.05 && s.darkPct < 0.1){
+      return { accepted:false, kind:'document',
+        reason:'Document or text image. No maritime content detected.' };
+    }
+    if (wp < 0.1){
+      return { accepted:false, kind:'no_water',
+        reason:'No water body detected ('+(wp*100).toFixed(1)+'% water pixels). Not a maritime scene.' };
+    }
+
+    // Evaluate the 6 scenarios
+    var scenarios = [];
+    if (o.detected) scenarios.push({ id:'oil', name:'OIL SPILL',
+      severity: o.coverage > 0.03 ? 'HIGH' : 'MODERATE',
+      detail: 'Dark patch on water surface ('+(o.coverage*100).toFixed(1)+'% coverage).' });
+    if (f.detected) scenarios.push({ id:'fire', name:'FIRE / THERMAL ANOMALY',
+      severity: f.coverage > 0.015 ? 'HIGH' : 'MODERATE',
+      detail: 'Saturated orange-red region ('+(f.coverage*100).toFixed(2)+'% coverage).' });
+
+    if (v.length >= 2){
+      for (var i=0;i<v.length;i++) for (var j=i+1;j<v.length;j++){
+        var a=v[i], b=v[j];
+        var d = Math.sqrt(Math.pow(a.cx-b.cx,2)+Math.pow(a.cy-b.cy,2));
+        var ratio = Math.max(a.area,b.area)/Math.min(a.area,b.area);
+        if (d < 45 && ratio > 3){
+          scenarios.push({ id:'approach', name:'SUSPICIOUS APPROACH', severity:'HIGH',
+            detail:'Small vessel within '+Math.round(d)+'px of larger vessel — possible transfer or boarding.' });
+        } else if (d < 28){
+          scenarios.push({ id:'collision', name:'COLLISION RISK', severity:'HIGH',
+            detail:'Two vessels within '+Math.round(d)+'px — potential collision.' });
+        }
+      }
+    }
+
+    if (o.detected && v.length === 0){
+      scenarios.push({ id:'orphan', name:'NATURAL / ORPHAN SPILL', severity:'MODERATE',
+        detail:'Oil slick detected with no vessel in frame — likely old or natural seep.' });
+    }
+
+    if (v.length > 0){
+      scenarios.push({ id:'vessel', name:'VESSEL PRESENT', severity:'INFO',
+        detail: v.length + ' vessel' + (v.length>1?'s':'') + ' detected in frame.' });
+    }
+
+    console.log('[strict] scenarios found:', scenarios.map(function(x){return x.name;}));
+
+    // Reject if none of the 6 present
+    if (scenarios.length === 0){
+      return {
+        accepted: false,
+        kind: 'no_threat',
+        scenarios: [],
+        reason: 'No maritime threat detected. Checked for 6 scenarios — oil spill, fire, collision risk, suspicious approach, natural spill, vessel presence. None found in this image.'
+      };
+    }
+
+    return { accepted:true, scenarios:scenarios, waterPct:wp, vesselCount:v.length };
+  }
+
+  function showResult(r){
+    var el = document.getElementById('analysisResult');
+    if (!el) return;
+    el.style.display = 'block';
+    el.style.padding = '14px 18px';
+    el.style.borderRadius = '4px';
+    el.style.fontFamily = "'Share Tech Mono', monospace";
+    el.style.fontSize = '12px';
+    el.style.marginTop = '15px';
+
+    if (!r.accepted){
+      el.style.background = 'rgba(255,71,87,0.08)';
+      el.style.border = '1px solid rgba(255,71,87,0.4)';
+      el.style.borderLeft = '3px solid #ff4757';
+      var titleMap = { selfie:'PERSON DETECTED', document:'DOCUMENT DETECTED', no_water:'NOT A MARITIME SCENE', no_threat:'NO THREAT DETECTED' };
+      var title = titleMap[r.kind] || 'IMAGE REJECTED';
+      el.innerHTML =
+        '<div style="color:#ff4757;letter-spacing:0.14em;font-size:11px;margin-bottom:8px;">⚠ '+title+'</div>' +
+        '<div style="color:#c9d8ea;line-height:1.6;font-size:11px;">'+r.reason+'</div>' +
+        (r.kind === 'no_threat' ?
+          '<div style="color:#5c7286;font-size:9px;margin-top:8px;letter-spacing:0.1em;">' +
+            'CHECKED · OIL SPILL · FIRE · COLLISION · APPROACH · ORPHAN SPILL · VESSEL' +
+          '</div>' : '');
+      return;
+    }
+
+    el.style.background = 'rgba(255,71,87,0.06)';
+    el.style.border = '1px solid rgba(255,71,87,0.35)';
+    el.style.borderLeft = '3px solid #ff4757';
+    var html =
+      '<div style="color:#ff4757;letter-spacing:0.14em;font-size:11px;margin-bottom:10px;">' +
+        '⚠ '+r.scenarios.length+' SCENARIO'+(r.scenarios.length>1?'S':'')+' DETECTED' +
+      '</div>';
+
+    html += r.scenarios.map(function(sc){
+      var c = sc.severity==='HIGH'?'#ff4757':sc.severity==='MODERATE'?'#fbbf24':sc.severity==='INFO'?'#00d4ff':'#5c7286';
+      return '<div style="margin-bottom:10px;padding-left:10px;border-left:2px solid '+c+';">' +
+        '<div style="color:'+c+';font-size:11px;letter-spacing:0.1em;font-weight:bold;">'+sc.name+' · '+sc.severity+'</div>' +
+        (sc.detail ? '<div style="color:#c9d8ea;font-size:11px;line-height:1.5;margin-top:3px;">'+sc.detail+'</div>' : '') +
+      '</div>';
+    }).join('');
+
+    html += '<div style="color:#5c7286;font-size:9px;margin-top:8px;letter-spacing:0.08em;">' +
+      'Water '+(r.waterPct*100).toFixed(1)+'% · Vessels '+r.vesselCount +
+    '</div>';
+
+    el.innerHTML = html;
+  }
+
+  function run(){
+    var input = document.getElementById('imageInput');
+    var el = document.getElementById('analysisResult');
+    if (!input || !input.files || !input.files[0]){
+      if (el){ el.style.display='block'; el.innerHTML='<span style="color:#ffb020;">⚠ No image selected. Click Browse first.</span>'; }
+      return;
+    }
+    var file = input.files[0];
+    var name = (file.name||'').toLowerCase();
+
+    if (/\.(heic|heif)$/.test(name) || /heic|heif/i.test(file.type||'')){
+      if (el){
+        el.style.display='block';
+        el.style.background='rgba(255,176,32,0.08)';
+        el.style.border='1px solid rgba(255,176,32,0.4)';
+        el.style.borderLeft='3px solid #ffb020';
+        el.innerHTML =
+          '<div style="color:#ffb020;font-size:11px;letter-spacing:0.12em;margin-bottom:6px;">⚠ UNSUPPORTED FORMAT</div>' +
+          '<div style="color:#c9d8ea;font-size:11px;line-height:1.6;">HEIC / HEIF not supported by browsers. Convert to JPG or PNG first.</div>';
+      }
+      return;
+    }
+
+    if (el) el.innerHTML = '<span style="color:#00d4ff;">◉ Analyzing '+file.name+'...</span>';
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      var img = new Image();
+      var timer = setTimeout(function(){
+        if (el) el.innerHTML = '<span style="color:#ffb020;">⚠ Image decode timed out — try JPG or PNG.</span>';
+      }, 5000);
+      img.onload = function(){
+        clearTimeout(timer);
+        setTimeout(function(){
+          try {
+            var r = classify(img);
+            showResult(r);
+            console.log('[strict] result', r);
+          } catch(e){
+            console.error('[strict] error', e);
+            if (el) el.innerHTML = '<span style="color:#ff4757;">⚠ Analysis error: '+e.message+'</span>';
+          }
+        }, 200);
+      };
+      img.onerror = function(){
+        clearTimeout(timer);
+        if (el) el.innerHTML = '<span style="color:#ffb020;">⚠ Image format not supported. Use JPG or PNG.</span>';
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // Override the Analyze button by cloning it (wipes old listeners)
+  function wire(){
+    var btn = document.getElementById('analyzeBtn');
+    if (!btn) { setTimeout(wire, 500); return; }
+    var clone = btn.cloneNode(true);
+    btn.parentNode.replaceChild(clone, btn);
+    clone.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      run();
+    });
+    console.log('[strict] analyze button rewired');
+  }
+  wire();
+
+  console.log('[strict] armed — 6-scenario detector');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
