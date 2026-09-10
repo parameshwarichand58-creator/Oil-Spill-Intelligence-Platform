@@ -3680,7 +3680,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
       if (oilPct > 95) oilPct = 95;
       var clusters = Math.max(1, Math.round(density / 25));
 
-      if (oilEl) oilEl.textContent = oilPct + '%';
+      if (oilEl) oilEl.textContent = 'DETECTED';
       if (shipsEl) shipsEl.textContent = ships;
       if (formEl) formEl.textContent = clusters;
       if (statusEl) statusEl.textContent = 'Scan complete · ' + new Date().toTimeString().slice(0,8);
@@ -3748,6 +3748,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
 
 <!-- trigger redeploy -->
+
 
 
 
