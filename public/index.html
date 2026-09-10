@@ -3592,12 +3592,83 @@ body.light-mode::-webkit-scrollbar-track,
 body[data-theme="light"]::-webkit-scrollbar-track {
   background: #e2e8f0 !important;
 }
-</style></html>
+</style><script>
+// Weather "last updated" counter — makes liveness visible
+(function(){
+  var lastFetch = 0;
+  var weatherUrl = 'https://api.open-meteo.com/v1/forecast?latitude=13.0827&longitude=80.2707&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code';
+
+  // Inject a small counter into the weather card
+  function injectAgo(){
+    var card = document.querySelector('#weatherWidget') || document.querySelector('[id*="weather"]');
+    if (!card) return false;
+    if (document.getElementById('weatherAgo')) return true;
+    var el = document.createElement('div');
+    el.id = 'weatherAgo';
+    el.style.cssText = 'font-family:\'Share Tech Mono\',monospace;font-size:9px;color:#00ff9d;margin-top:6px;letter-spacing:0.1em;';
+    el.textContent = '● LIVE · updated just now';
+    var parent = card.closest('.card') || card.parentElement;
+    if (parent) parent.appendChild(el);
+    return true;
+  }
+
+  var tries = 0;
+  var t = setInterval(function(){
+    tries++;
+    if (injectAgo() || tries > 120) clearInterval(t);
+  }, 500);
+
+  async function tick(){
+    try{
+      var r = await fetch(weatherUrl);
+      var d = await r.json();
+      var cur = d.current;
+      var t2 = Math.round(cur.temperature_2m);
+      var h = Math.round(cur.relative_humidity_2m);
+      var w = Math.round(cur.wind_speed_10m);
+      var code = cur.weather_code;
+
+      var icon = '☀️', desc = 'Clear';
+      if (code>=1&&code<=3){icon='🌤️';desc='Partly cloudy';}
+      else if (code>=45&&code<=48){icon='🌫️';desc='Fog';}
+      else if (code>=51&&code<=67){icon='🌧️';desc='Rain';}
+      else if (code>=80&&code<=82){icon='🌦️';desc='Showers';}
+      else if (code>=95){icon='⛈️';desc='Thunderstorm';}
+
+      var set = function(id, v){ var e=document.getElementById(id); if(e) e.textContent=v; };
+      set('weatherIcon', icon);
+      set('weatherTemp', t2 + '°C');
+      set('weatherDesc', desc);
+      set('weatherWind', w);
+      set('weatherHumidity', h);
+
+      lastFetch = Date.now();
+      var el = document.getElementById('weatherAgo');
+      if (el) el.textContent = '● LIVE · updated just now';
+      console.log('[weather] fetched', t2 + 'C', desc);
+    } catch(e){ console.warn('[weather]', e.message); }
+  }
+
+  // Every second, update the "X seconds ago" text
+  setInterval(function(){
+    var el = document.getElementById('weatherAgo');
+    if (!el || !lastFetch) return;
+    var sec = Math.floor((Date.now() - lastFetch) / 1000);
+    if (sec < 5) el.textContent = '● LIVE · updated just now';
+    else if (sec < 60) el.textContent = '● LIVE · updated ' + sec + 's ago';
+    else el.textContent = '● LIVE · updated ' + Math.floor(sec/60) + 'm ago';
+  }, 1000);
+
+  tick();
+  setInterval(tick, 60000); // refresh every 1 minute instead of 10
+})();
+</script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
