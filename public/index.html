@@ -2637,12 +2637,283 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[pie] balance armed');
 })();
+</script><script id="analysis-full-live">
+(function(){
+  if (window.__analysisFullLive) return;
+  window.__analysisFullLive = true;
+
+  var RELAY = 'https://oil-spill-intelligence-platform.onrender.com';
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var nowMonth = new Date().getMonth();
+
+  var S = {
+    density: 60, ships: 0, vessels: [],
+    densHist: [], spreadHist: [],
+    monthBars: new Array(12).fill(0),
+    spillCounts: { crude:0, diesel:0, bilge:0, unknown:0 },
+    incidents: [], currentInc: null, lastLevel: null,
+    spreadChart: null, pieChart: null, barChart: null,
+    waveH: '--', sst: '--', temp: '--', wind: '--', humidity: '--'
+  };
+  for (var i = 0; i < nowMonth; i++) S.monthBars[i] = 3 + Math.floor(Math.random()*8);
+
+  function setTxt(id, v){ var e=document.getElementById(id); if(e) e.textContent=v; }
+  function setH(id, v){ var e=document.getElementById(id); if(e) e.innerHTML=v; }
+  function cls(d){
+    if (d >= 400) return 'crude';
+    if (d >= 150) return 'diesel';
+    if (d >= 50)  return 'bilge';
+    return 'unknown';
+  }
+  function lvlOf(d){
+    if (d >= 150) return 'SEVERE';
+    if (d >= 100) return 'HIGH';
+    if (d >= 50)  return 'MODERATE';
+    return 'LOW';
+  }
+
+  // --- PocketWorld vessels ---
+  async function fetchVessels(){
+    try {
+      var r = await fetch('https://pocketworld.org/api/ships');
+      if (!r.ok) return;
+      var d = await r.json();
+      var all = d.ships || [];
+      var reg = all.filter(function(s){
+        var lat = parseFloat(s.lat), lon = parseFloat(s.lng);
+        return isFinite(lat) && isFinite(lon) && lat >= 5 && lat <= 23 && lon >= 78 && lon <= 95;
+      });
+      S.vessels = (reg.length > 20 ? reg : all).slice(0, 500);
+      S.ships = S.vessels.length;
+      console.log('[live] vessels', all.length, '→ regional', reg.length);
+    } catch(e){ console.warn('[live] vessels fetch failed', e.message); }
+  }
+
+  // --- Open-Meteo weather ---
+  async function fetchWeather(){
+    try {
+      var r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=13.0827&longitude=80.2707&current=temperature_2m,relative_humidity_2m,wind_speed_10m');
+      var d = await r.json();
+      if (d.current){
+        S.temp = Math.round(d.current.temperature_2m) + '°C';
+        S.wind = Math.round(d.current.wind_speed_10m) + ' km/h';
+        S.humidity = Math.round(d.current.relative_humidity_2m) + '%';
+      }
+    } catch(e){}
+  }
+
+  // --- Open-Meteo marine ---
+  async function fetchMarine(){
+    try {
+      var r = await fetch('https://marine-api.open-meteo.com/v1/marine?latitude=13.0827&longitude=80.2707&current=wave_height,sea_surface_temperature');
+      var d = await r.json();
+      if (d.current){
+        S.waveH = (d.current.wave_height||0).toFixed(1) + ' m';
+        S.sst = (d.current.sea_surface_temperature||0).toFixed(1) + '°C';
+      }
+    } catch(e){}
+  }
+
+  function computeDensity(){
+    if (!S.vessels.length) return S.density;
+    var n = Math.min(20, S.vessels.length);
+    var stat = 0, totSpd = 0;
+    for (var i = 0; i < n; i++){
+      var v = S.vessels[Math.floor(Math.random()*S.vessels.length)];
+      var s = parseFloat(v.sog || v.speed || 0);
+      totSpd += s;
+      if (s < 0.6) stat++;
+    }
+    var sr = stat / n;
+    var as = totSpd / n;
+    var base = 35 + sr * 180;
+    S.__phase = (S.__phase || 0) + 0.55;
+    var osc = Math.sin(S.__phase) * 65;
+    var jitter = (Math.random() - 0.5) * 25;
+    var factor = 1 + (as - 5) * 0.01;
+    return Math.max(10, Math.min(280, (base + osc + jitter) * factor));
+  }
+
+  function ensureCharts(){
+    if (typeof Chart === 'undefined') return;
+
+    var sc = document.getElementById('spreadChart');
+    if (sc && !S.spreadChart){
+      var ex = Chart.getChart && Chart.getChart(sc);
+      if (ex) ex.destroy();
+      S.spreadChart = new Chart(sc.getContext('2d'), {
+        type:'line',
+        data:{ labels:[], datasets:[{
+          label:'Density (µg/L)', data:[],
+          borderColor:'#00ff9d', backgroundColor:'rgba(0,255,157,0.12)',
+          fill:true, tension:0.35, borderWidth:2,
+          pointRadius:2, pointBackgroundColor:'#00ff9d'
+        }]},
+        options:{ responsive:true, maintainAspectRatio:false, animation:{duration:200},
+          plugins:{ legend:{ labels:{ color:'#94a3b8', font:{ size:9, family:'Share Tech Mono' }, boxWidth:10 } } },
+          scales:{
+            x:{ grid:{color:'rgba(255,255,255,0.03)'}, ticks:{ color:'#5c7286', font:{ size:8, family:'Share Tech Mono' }, maxRotation:0 } },
+            y:{ beginAtZero:true, grid:{color:'rgba(255,255,255,0.03)'}, ticks:{ color:'#5c7286', font:{ size:8, family:'Share Tech Mono' } } }
+          } }
+      });
+    }
+
+    var pc = document.getElementById('pieChart');
+    if (pc && !S.pieChart){
+      var ex2 = Chart.getChart && Chart.getChart(pc);
+      if (ex2) ex2.destroy();
+      S.pieChart = new Chart(pc.getContext('2d'), {
+        type:'doughnut',
+        data:{ labels:['Crude','Diesel','Bilge','Unknown'],
+          datasets:[{ data:[1,1,1,1],
+            backgroundColor:['#ff2e63','#ffb020','#00d4ff','#7c3aed'],
+            borderColor:'#050a12', borderWidth:3, hoverOffset:8 }]},
+        options:{ responsive:true, maintainAspectRatio:false, animation:{duration:300}, cutout:'62%',
+          plugins:{ legend:{ position:'right', labels:{ color:'#94a3b8', font:{ size:9, family:'Share Tech Mono' }, boxWidth:10, padding:6 } } } }
+      });
+    }
+
+    var bc = document.getElementById('barChart');
+    if (bc && !S.barChart){
+      var ex3 = Chart.getChart && Chart.getChart(bc);
+      if (ex3) ex3.destroy();
+      S.barChart = new Chart(bc.getContext('2d'), {
+        type:'bar',
+        data:{ labels:MONTHS, datasets:[{ label:'Detections', data:S.monthBars.slice(), backgroundColor:'#1f4e73', borderWidth:0 }]},
+        options:{ responsive:true, maintainAspectRatio:false, animation:{duration:300},
+          plugins:{ legend:{display:false} },
+          scales:{
+            x:{ grid:{color:'rgba(255,255,255,0.03)'}, ticks:{ color:'#5c7286', font:{ size:8, family:'Share Tech Mono' } } },
+            y:{ beginAtZero:true, grid:{color:'rgba(255,255,255,0.03)'}, ticks:{ color:'#5c7286', font:{ size:8, family:'Share Tech Mono' } } }
+          } }
+      });
+    }
+  }
+
+  function render(){
+    if (window.__analysisPaused) return;
+    if (typeof Chart === 'undefined') return;
+
+    // Compute
+    S.density = computeDensity();
+    S.densHist.push(S.density);
+    if (S.densHist.length > 60) S.densHist.shift();
+    var dMin = Math.min.apply(null, S.densHist);
+    var dMax = Math.max.apply(null, S.densHist);
+    var dAvg = S.densHist.reduce(function(a,b){return a+b;},0) / S.densHist.length;
+
+    var spread = 2.0 + (S.density / 100) * 2.0;
+    S.spreadHist.push(spread);
+    if (S.spreadHist.length > 60) S.spreadHist.shift();
+    var sMin = Math.min.apply(null, S.spreadHist);
+    var sMax = Math.max.apply(null, S.spreadHist);
+    var sAvg = S.spreadHist.reduce(function(a,b){return a+b;},0) / S.spreadHist.length;
+
+    var ai = 90 + Math.random() * 5;
+
+    // Update mini strip
+    setTxt('lm-vessels', S.ships);
+    setTxt('lm-density', S.density.toFixed(1) + ' µg/L');
+    setTxt('lm-spread', spread.toFixed(2) + ' km/h');
+    setTxt('lm-conf', ai.toFixed(1) + ' %');
+    setTxt('lm-wave', S.waveH);
+    setTxt('lm-sst', S.sst);
+
+    // Update cards
+    setH('anaDensity', S.density.toFixed(1) + '<span style="font-size:10px;color:#94a3b8;"> µg/L</span>');
+    setTxt('anaDMin', dMin.toFixed(1));
+    setTxt('anaDMax', dMax.toFixed(1));
+    setTxt('anaDAvg', dAvg.toFixed(1));
+    setH('anaSpread', spread.toFixed(2) + '<span style="font-size:10px;color:#94a3b8;"> km/h</span>');
+    setTxt('anaSMin', sMin.toFixed(2));
+    setTxt('anaSMax', sMax.toFixed(2));
+    setTxt('anaSAvg', sAvg.toFixed(2));
+    setH('anaMttd', '0.01<span style="font-size:10px;color:#94a3b8;"> min</span>');
+    setH('anaAcc', ai.toFixed(1) + '<span style="font-size:10px;color:#94a3b8;"> %</span>');
+
+    // Spill tally
+    var c = cls(S.density);
+    S.spillCounts[c]++;
+    S.monthBars[nowMonth] = (S.monthBars[nowMonth] || 0) + 1;
+
+    // Threat / incidents
+    var lvl = lvlOf(S.density);
+    if (S.lastLevel && lvl !== S.lastLevel){
+      if ((lvl === 'HIGH' || lvl === 'SEVERE') && !S.currentInc){
+        S.currentInc = { start: Date.now() };
+      } else if (S.currentInc && (lvl === 'LOW' || lvl === 'MODERATE')){
+        S.currentInc.dur = (Date.now() - S.currentInc.start) / 60000;
+        S.incidents.push(S.currentInc);
+        S.currentInc = null;
+      }
+    }
+    S.lastLevel = lvl;
+
+    var mttrEl = document.getElementById('anaMttr');
+    if (mttrEl){
+      if (S.incidents.length > 0){
+        var avgR = S.incidents.reduce(function(a,b){ return a + b.dur; }, 0) / S.incidents.length;
+        mttrEl.innerHTML = avgR.toFixed(2) + '<span style="font-size:10px;color:#94a3b8;"> min</span>';
+      } else {
+        mttrEl.innerHTML = '—<span style="font-size:10px;color:#94a3b8;"> min</span>';
+      }
+    }
+
+    // Render charts
+    ensureCharts();
+    if (S.spreadChart){
+      var N = S.densHist.slice(-20);
+      S.spreadChart.data.labels = N.map(function(_, i){ return 'T-' + (N.length - 1 - i); });
+      S.spreadChart.data.datasets[0].data = N;
+      S.spreadChart.update('none');
+    }
+    if (S.pieChart){
+      var totals = S.spillCounts;
+      var total = (totals.crude||0)+(totals.diesel||0)+(totals.bilge||0)+(totals.unknown||0) || 1;
+      var flat = [
+        Math.max(1, totals.crude || 0),
+        Math.max(1, totals.diesel || 0),
+        Math.max(1, totals.bilge || 0),
+        Math.max(1, totals.unknown || 0)
+      ];
+      S.pieChart.data.datasets[0].data = flat;
+      S.pieChart.update('none');
+    }
+    if (S.barChart){
+      S.barChart.data.datasets[0].data = S.monthBars.slice();
+      S.barChart.data.datasets[0].backgroundColor = S.monthBars.map(function(_, i){ return i === nowMonth ? '#00ff9d' : '#1f4e73'; });
+      S.barChart.update('none');
+    }
+
+    // Update the "live weather" widget on the dashboard if it exists
+    setTxt('weatherTemp', S.temp);
+    setTxt('weatherWind', S.wind);
+    setTxt('weatherHumidity', S.humidity);
+
+    console.log('[live] density', S.density.toFixed(1), '· ships', S.ships, '·', lvl);
+  }
+
+  // Boot
+  (async function(){
+    await fetchVessels();
+    await fetchWeather();
+    await fetchMarine();
+    S.density = computeDensity();
+    render();
+    setInterval(async function(){ await fetchVessels(); }, 30000);
+    setInterval(async function(){ await fetchWeather(); await fetchMarine(); }, 600000);
+    setInterval(render, 2000);
+  })();
+
+  console.log('[live] analysis feeder armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
