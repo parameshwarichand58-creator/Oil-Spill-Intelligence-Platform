@@ -2917,12 +2917,64 @@ input:focus,select:focus,textarea:focus{
   // Keep refreshing every 5 minutes
   setInterval(refresh, 300000);
 })();
+</script><script>
+// Threat Level live updater — reads density from relay, updates the display
+(function(){
+  var RELAY = 'https://oil-spill-intelligence-platform.onrender.com';
+
+  function threatFor(d){
+    if (d >= 400) return { txt:'SEVERE',   color:'#ff4757' };
+    if (d >= 150) return { txt:'HIGH',     color:'#ff4757' };
+    if (d >= 50)  return { txt:'MODERATE', color:'#fbbf24' };
+    return          { txt:'LOW',      color:'#00d4aa' };
+  }
+
+  function applyThreat(d){
+    var t = threatFor(d);
+
+    // The big threat word (font-size 34-40, Orbitron)
+    var all = document.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++){
+      var el = all[i];
+      if (el.children.length > 0) continue;
+      var txt = (el.textContent || '').trim();
+      if (/^(LOW|MODERATE|HIGH|SEVERE)$/.test(txt)){
+        var fs = parseInt(el.style.fontSize || '0', 10);
+        if (fs >= 20){
+          el.textContent = t.txt;
+          el.style.color = t.color;
+        }
+      }
+      // The note under the threat level
+      if (/^No active threats|escalate per threshold|All systems nominal/.test(txt)){
+        el.textContent = (t.txt === 'LOW')
+          ? 'No active threats · All systems nominal'
+          : t.txt + ' · escalate per threshold table';
+      }
+    }
+    console.log('[threat]', t.txt, 'for density', d.toFixed(1));
+  }
+
+  async function poll(){
+    try {
+      var r = await fetch(RELAY + '/health');
+      var data = await r.json();
+      var d = typeof data.density === 'number' ? data.density : 0;
+      applyThreat(d);
+    } catch(e) { console.warn('[threat] poll failed:', e.message); }
+  }
+
+  // Wait for the page to render, then start
+  setTimeout(poll, 500);
+  setInterval(poll, 30000);
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
