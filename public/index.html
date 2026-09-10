@@ -3481,12 +3481,124 @@ input:focus,select:focus,textarea:focus{
   cycleSat();
   setInterval(cycleSat, 3000);
 })();
-</script></html>
+</script><style id="hybrid-light-mode">
+/* Light mode overrides — activate when body has .light or [data-theme="light"] */
+body.light,
+body.light-mode,
+body[data-theme="light"],
+html.light body,
+html[data-theme="light"] body {
+  background: #eef2f7 !important;
+  color: #1a2530 !important;
+}
+body.light::before,
+body.light-mode::before,
+body[data-theme="light"]::before,
+html.light body::before,
+html[data-theme="light"] body::before {
+  opacity: 0.15 !important;
+}
+body.light::after,
+body.light-mode::after,
+body[data-theme="light"]::after {
+  display: none !important;
+}
+body.light .card,
+body.light-mode .card,
+body[data-theme="light"] .card {
+  background: #ffffff !important;
+  border-color: rgba(74,158,255,0.2) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+}
+body.light .card-title,
+body.light-mode .card-title,
+body[data-theme="light"] .card-title {
+  color: #475569 !important;
+  border-bottom-color: rgba(74,158,255,0.15) !important;
+}
+body.light .card-title::before,
+body.light-mode .card-title::before,
+body[data-theme="light"] .card-title::before {
+  background: linear-gradient(180deg, #4a9eff, #00d4aa) !important;
+}
+body.light .kpi,
+body.light .stat-number,
+body.light h1, body.light h2, body.light h3,
+body.light-mode h1, body.light-mode h2, body.light-mode h3,
+body[data-theme="light"] h1,
+body[data-theme="light"] h2,
+body[data-theme="light"] h3 {
+  color: #0f172a !important;
+  text-shadow: none !important;
+}
+body.light #sidebar,
+body.light-mode #sidebar,
+body[data-theme="light"] #sidebar {
+  background: #ffffff !important;
+  border-right-color: rgba(74,158,255,0.15) !important;
+}
+body.light .nav-item,
+body.light-mode .nav-item,
+body[data-theme="light"] .nav-item {
+  color: #475569 !important;
+}
+body.light .nav-item.active,
+body.light-mode .nav-item.active,
+body[data-theme="light"] .nav-item.active {
+  background: rgba(74,158,255,0.08) !important;
+  color: #0f172a !important;
+}
+body.light #mc-ticker,
+body.light-mode #mc-ticker,
+body[data-theme="light"] #mc-ticker {
+  background: linear-gradient(90deg, #f0f4f8, #e6ecf3, #f0f4f8) !important;
+  border-bottom-color: rgba(74,158,255,0.2) !important;
+  color: #334155 !important;
+}
+body.light #mc-ticker .tick-item b,
+body.light-mode #mc-ticker .tick-item b,
+body[data-theme="light"] #mc-ticker .tick-item b {
+  color: #0f172a !important;
+  text-shadow: none !important;
+}
+body.light table thead th,
+body.light-mode table thead th,
+body[data-theme="light"] table thead th {
+  background: rgba(74,158,255,0.06) !important;
+  color: #475569 !important;
+}
+body.light table tbody tr:hover,
+body.light-mode table tbody tr:hover,
+body[data-theme="light"] table tbody tr:hover {
+  background: rgba(74,158,255,0.04) !important;
+}
+body.light input, body.light select, body.light textarea,
+body.light-mode input, body.light-mode select, body.light-mode textarea,
+body[data-theme="light"] input,
+body[data-theme="light"] select,
+body[data-theme="light"] textarea {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: rgba(74,158,255,0.25) !important;
+}
+body.light .btn-outline,
+body.light-mode .btn-outline,
+body[data-theme="light"] .btn-outline {
+  color: #334155 !important;
+  border-color: rgba(74,158,255,0.25) !important;
+}
+body.light::-webkit-scrollbar-track,
+body.light-mode::-webkit-scrollbar-track,
+body[data-theme="light"]::-webkit-scrollbar-track {
+  background: #e2e8f0 !important;
+}
+</style></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
