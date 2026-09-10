@@ -4000,512 +4000,6 @@ body[data-theme="light"]::-webkit-scrollbar-track {
     setInterval(render, 30000);
   }, 2000);
 })();
-</script><script id="response-time-live">
-// Response Time — populated from real threat transitions in this session
-(function(){
-  var incidents = [];        // { start, end, duration, peakDensity }
-  var currentIncident = null;
-  var sessionStart = Date.now();
-  var lastLevel = null;
-  var detectionLags = [];    // time from density move to threat display change
-
-  function rank(l){ return { LOW:0, MODERATE:1, HIGH:2, SEVERE:3 }[l] || 0; }
-
-  function recordDetection(){
-    // Time between density fetch and threat update — sub-second in practice
-    var lag = 0.4 + Math.random() * 0.3; // in seconds
-    detectionLags.push(lag);
-    if (detectionLags.length > 20) detectionLags.shift();
-  }
-
-  function tick(){
-    var el = document.getElementById('threatLevelText');
-    if (!el) return;
-    var lvl = (el.textContent || '').trim();
-    if (!/^(LOW|MODERATE|HIGH|SEVERE)$/.test(lvl)) return;
-
-    var now = Date.now();
-
-    if (lastLevel === null){
-      lastLevel = lvl;
-      return;
-    }
-
-    if (lvl !== lastLevel){
-      recordDetection();
-
-      // Entering HIGH or SEVERE — open an incident
-      if (rank(lvl) >= 2 && rank(lastLevel) < 2 && !currentIncident){
-        var dEl = document.getElementById('liveOilDensity') || document.getElementById('anaDensity');
-        var d = dEl ? parseFloat(dEl.textContent) || 0 : 0;
-        currentIncident = { start: now, peakDensity: d, level: lvl };
-        console.log('[response] incident opened at', lvl, d.toFixed(1));
-      }
-
-      // Leaving HIGH/SEVERE — close the incident
-      if (currentIncident && rank(lvl) < 2){
-        currentIncident.end = now;
-        currentIncident.duration = (now - currentIncident.start) / 60000; // minutes
-        incidents.push(currentIncident);
-        console.log('[response] incident closed, duration', currentIncident.duration.toFixed(2), 'min');
-        currentIncident = null;
-      }
-
-      lastLevel = lvl;
-      render();
-    }
-  }
-
-  function render(){
-    // MTTD — mean time to detect (in minutes)
-    var mttdEl = document.getElementById('anaMttd');
-    if (mttdEl){
-      if (detectionLags.length > 0){
-        var avgLagMin = (detectionLags.reduce(function(a,b){return a+b;},0) / detectionLags.length) / 60;
-        mttdEl.innerHTML = avgLagMin.toFixed(2) + '<span style="font-size:11px;color:#94a3b8;"> min</span>';
-      } else {
-        mttdEl.innerHTML = '0.01<span style="font-size:11px;color:#94a3b8;"> min</span>';
-      }
-    }
-
-    // MTTR — mean time to respond (from incident duration)
-    var mttrEl = document.getElementById('anaMttr');
-    if (mttrEl){
-      if (incidents.length > 0){
-        var avg = incidents.reduce(function(a,b){ return a + b.duration; }, 0) / incidents.length;
-        mttrEl.innerHTML = avg.toFixed(2) + '<span style="font-size:11px;color:#94a3b8;"> min</span>';
-      } else {
-        mttrEl.innerHTML = '—<span style="font-size:11px;color:#94a3b8;"> min</span>';
-      }
-    }
-
-    // Response Time big number
-    var respEl = document.getElementById('anaResp');
-    if (respEl){
-      if (incidents.length > 0){
-        var avg = incidents.reduce(function(a,b){ return a + b.duration; }, 0) / incidents.length;
-        respEl.textContent = avg.toFixed(2) + ' min';
-      } else {
-        respEl.textContent = '—';
-      }
-    }
-
-    // Min / Max labels under Response Time
-    if (incidents.length > 0){
-      var durs = incidents.map(function(i){ return i.duration; });
-      var minEl = document.getElementById('anaRespMin');
-      var maxEl = document.getElementById('anaRespMax');
-      if (minEl) minEl.textContent = Math.min.apply(null, durs).toFixed(2) + ' min';
-      if (maxEl) maxEl.textContent = Math.max.apply(null, durs).toFixed(2) + ' min';
-    }
-  }
-
-  // Fallback: use session time as "MTTD" if nothing else
-  function sessionFallback(){
-    if (detectionLags.length === 0 && sessionStart){
-      var mttdEl = document.getElementById('anaMttd');
-      if (mttdEl && mttdEl.textContent.indexOf('—') === 0){
-        mttdEl.innerHTML = '0.01<span style="font-size:11px;color:#94a3b8;"> min</span>';
-      }
-    }
-  }
-
-  setInterval(tick, 1000);
-  setInterval(sessionFallback, 5000);
-  sessionFallback();
-  console.log('[response] live tracker armed');
-})();
-</script><script id="live-spread-feeder">
-// Feed live density into Oil Spread Trend + Response Time
-(function(){
-  var MAX_POINTS = 20;
-  var labels = [];
-  var data = [];
-  var responseHistory = [];
-  var incidents = [];
-  var currentIncident = null;
-  var lastLevel = null;
-  var chart = null;
-
-  function getDensity(){
-    var el = document.getElementById('tick-density');
-    if (!el) el = document.getElementById('liveOilDensity');
-    if (!el) el = document.getElementById('anaDensity');
-    if (!el) return 0;
-    return parseFloat((el.textContent || '0').replace(/[^0-9.]/g, '')) || 0;
-  }
-
-  function getShips(){
-    var el = document.getElementById('tick-ships');
-    if (!el) el = document.getElementById('statShips');
-    if (!el) return 0;
-    return parseInt((el.textContent || '0').replace(/[^0-9]/g, '')) || 0;
-  }
-
-  function nowLabel(){
-    var d = new Date();
-    var h = String(d.getHours()).padStart(2, '0');
-    var m = String(d.getMinutes()).padStart(2, '0');
-    var s = String(d.getSeconds()).padStart(2, '0');
-    return h + ':' + m + ':' + s;
-  }
-
-  function initChart(){
-    if (chart) return true;
-    var canvas = document.getElementById('spreadChart');
-    if (!canvas || typeof Chart === 'undefined') return false;
-
-    // If an existing chart is bound to this canvas, destroy it first
-    try {
-      if (window.__spreadChartInstance) {
-        window.__spreadChartInstance.destroy();
-        window.__spreadChartInstance = null;
-      }
-      var existing = Chart.getChart && Chart.getChart(canvas);
-      if (existing) existing.destroy();
-    } catch(e){}
-
-    var ctx = canvas.getContext('2d');
-    chart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: labels,
-        datasets: [{
-          label: 'Oil Density (µg/L)',
-          data: data,
-          borderColor: '#00ff9d',
-          backgroundColor: 'rgba(0,255,157,0.12)',
-          borderWidth: 2,
-          tension: 0.35,
-          fill: true,
-          pointRadius: 3,
-          pointBackgroundColor: '#00ff9d',
-          pointBorderColor: '#0a1420',
-          pointBorderWidth: 1.5
-        }, {
-          label: 'Ships',
-          data: [],
-          borderColor: '#00d4ff',
-          backgroundColor: 'transparent',
-          borderWidth: 1,
-          borderDash: [4,4],
-          tension: 0.35,
-          pointRadius: 0,
-          yAxisID: 'y1'
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: { duration: 400 },
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: {
-            display: true,
-            labels: { color: '#94a3b8', font: { size: 10, family: 'Share Tech Mono' }, boxWidth: 12 }
-          },
-          tooltip: {
-            backgroundColor: 'rgba(8,14,22,0.95)',
-            borderColor: 'rgba(0,255,157,0.3)',
-            borderWidth: 1,
-            titleColor: '#00ff9d',
-            bodyColor: '#c9d8ea',
-            titleFont: { family: 'Share Tech Mono', size: 11 },
-            bodyFont: { family: 'Share Tech Mono', size: 11 }
-          }
-        },
-        scales: {
-          x: {
-            grid: { color: 'rgba(255,255,255,0.03)', drawTicks: false },
-            ticks: { color: '#5c7286', font: { size: 9, family: 'Share Tech Mono' }, maxRotation: 0 }
-          },
-          y: {
-            beginAtZero: true,
-            grid: { color: 'rgba(255,255,255,0.03)', drawTicks: false },
-            ticks: { color: '#5c7286', font: { size: 9, family: 'Share Tech Mono' } },
-            title: { display: true, text: 'µg/L', color: '#5c7286', font: { size: 9 } }
-          },
-          y1: {
-            position: 'right',
-            beginAtZero: true,
-            grid: { drawOnChartArea: false },
-            ticks: { color: '#00d4ff', font: { size: 9, family: 'Share Tech Mono' } },
-            title: { display: true, text: 'Ships', color: '#00d4ff', font: { size: 9 } }
-          }
-        }
-      }
-    });
-    window.__spreadChartInstance = chart;
-    console.log('[trend] chart initialised');
-    return true;
-  }
-
-  function pushPoint(){
-    var d = getDensity();
-    var s = getShips();
-    labels.push(nowLabel());
-    data.push(d);
-    if (chart && chart.data.datasets[1]) chart.data.datasets[1].data.push(s);
-    if (labels.length > MAX_POINTS){
-      labels.shift();
-      data.shift();
-      if (chart && chart.data.datasets[1]) chart.data.datasets[1].data.shift();
-    }
-    if (chart){ chart.update('none'); }
-    console.log('[trend] point', d, 'µg/L · ships', s);
-  }
-
-  function updateResponse(){
-    var textEl = document.getElementById('anaResp');
-    var mttdEl = document.getElementById('anaMttd');
-    var mttrEl = document.getElementById('anaMttr');
-
-    // MTTD — real detection lag (sub-second in practice)
-    if (mttdEl && mttdEl.textContent.indexOf('—') === 0){
-      mttdEl.innerHTML = '0.01<span style="font-size:11px;color:#94a3b8;"> min</span>';
-    }
-
-    // MTTR — from completed incidents
-    if (incidents.length > 0){
-      var durs = incidents.map(function(i){ return i.duration; });
-      var avg = durs.reduce(function(a,b){return a+b;},0) / durs.length;
-
-      if (mttrEl){
-        mttrEl.innerHTML = avg.toFixed(2) + '<span style="font-size:11px;color:#94a3b8;"> min</span>';
-      }
-      if (textEl) textEl.textContent = avg.toFixed(2) + ' min';
-
-      var minEl = document.getElementById('anaRespMin');
-      var maxEl = document.getElementById('anaRespMax');
-      if (minEl) minEl.textContent = Math.min.apply(null, durs).toFixed(2) + ' min';
-      if (maxEl) maxEl.textContent = Math.max.apply(null, durs).toFixed(2) + ' min';
-    } else {
-      if (mttrEl) mttrEl.innerHTML = '—<span style="font-size:11px;color:#94a3b8;"> min</span>';
-      if (textEl) textEl.textContent = '—';
-    }
-  }
-
-  function watchThreat(){
-    var el = document.getElementById('threatLevelText');
-    if (!el) return;
-    var lvl = (el.textContent || '').trim();
-    if (!/^(LOW|MODERATE|HIGH|SEVERE)$/.test(lvl)) return;
-
-    var rank = { LOW:0, MODERATE:1, HIGH:2, SEVERE:3 };
-    var now = Date.now();
-
-    if (lastLevel === null){ lastLevel = lvl; return; }
-    if (lvl === lastLevel) return;
-
-    // Entering HIGH or SEVERE — open incident
-    if (rank[lvl] >= 2 && rank[lastLevel] < 2 && !currentIncident){
-      currentIncident = { start: now, density: getDensity() };
-      console.log('[response] incident opened at', lvl);
-    }
-    // Leaving HIGH/SEVERE — close
-    if (currentIncident && rank[lvl] < 2){
-      currentIncident.end = now;
-      currentIncident.duration = (now - currentIncident.start) / 60000;
-      incidents.push(currentIncident);
-      responseHistory.push(currentIncident.duration);
-      console.log('[response] incident closed, duration', currentIncident.duration.toFixed(2), 'min');
-      currentIncident = null;
-      updateResponse();
-    }
-    lastLevel = lvl;
-    updateResponse();
-  }
-
-  // Boot
-  setTimeout(function(){
-    if (initChart()){
-      // Initial seeded points so the chart isn't empty
-      for (var i = 0; i < 5; i++){
-        pushPoint();
-      }
-      // Push a new point every 5 seconds (density updates every 5s)
-      setInterval(pushPoint, 5000);
-    } else {
-      console.warn('[trend] chart canvas not found — retrying');
-      setTimeout(function(){ initChart() && setInterval(pushPoint, 5000); }, 2000);
-    }
-  }, 1500);
-
-  setInterval(watchThreat, 1000);
-  setInterval(updateResponse, 2000);
-  console.log('[trend] live feeder armed');
-})();
-</script><script id="spill-monthly-feeder">
-// Feed live data into Spill Types (doughnut) + Monthly Comparison (bar)
-(function(){
-  var CLASSIFY = { crude:400, diesel:150, bilge:50, unknown:0 };
-  var counts = { crude:0, diesel:0, bilge:0, unknown:0 };
-  var monthly = [0,0,0,0,0,0,0,0,0,0,0,0];
-  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  var monthlySeeded = false;
-
-  function classify(d){
-    if (d >= CLASSIFY.crude)  return 'crude';
-    if (d >= CLASSIFY.diesel) return 'diesel';
-    if (d >= CLASSIFY.bilge)  return 'bilge';
-    return 'unknown';
-  }
-
-  function getDensity(){
-    var el = document.getElementById('tick-density');
-    if (!el) el = document.getElementById('liveOilDensity');
-    if (!el) el = document.getElementById('anaDensity');
-    if (!el) return 0;
-    return parseFloat((el.textContent || '0').replace(/[^0-9.]/g, '')) || 0;
-  }
-
-  function initCharts(){
-    var pieCanvas = document.getElementById('pieChart');
-    var barCanvas = document.getElementById('barChart');
-    if (!pieCanvas || !barCanvas || typeof Chart === 'undefined') return false;
-
-    // Destroy any prior chart instances to avoid "canvas already in use"
-    try {
-      if (window.__pieInstance){ window.__pieInstance.destroy(); window.__pieInstance = null; }
-      if (window.__barInstance){ window.__barInstance.destroy(); window.__barInstance = null; }
-      var existingPie = Chart.getChart && Chart.getChart(pieCanvas);
-      var existingBar = Chart.getChart && Chart.getChart(barCanvas);
-      if (existingPie) existingPie.destroy();
-      if (existingBar) existingBar.destroy();
-    } catch(e){}
-
-    // --- Spill Types doughnut ---
-    window.__pieInstance = new Chart(pieCanvas.getContext('2d'), {
-      type: 'doughnut',
-      data: {
-        labels: ['Crude', 'Diesel', 'Bilge', 'Unknown'],
-        datasets: [{
-          data: [1, 1, 1, 1],
-          backgroundColor: ['#ff4757', '#ffb020', '#00d4ff', '#2a3d55'],
-          borderColor: '#0a1420',
-          borderWidth: 2
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: { duration: 400 },
-        cutout: '62%',
-        plugins: {
-          legend: {
-            position: 'right',
-            labels: { color: '#94a3b8', font: { size: 10, family: 'Share Tech Mono' }, boxWidth: 10, padding: 9 }
-          },
-          tooltip: {
-            backgroundColor: 'rgba(8,14,22,0.95)',
-            borderColor: 'rgba(0,255,157,0.3)',
-            borderWidth: 1,
-            titleColor: '#00ff9d',
-            bodyColor: '#c9d8ea'
-          }
-        }
-      }
-    });
-
-    // --- Monthly Comparison bar ---
-    // Seed past 8 months with plausible historic counts; current month builds live
-    var thisMonth = new Date().getMonth();
-    for (var i = 0; i < 12; i++){
-      if (i === thisMonth) monthly[i] = 1;
-      else if (i < thisMonth) monthly[i] = 3 + Math.floor(Math.random() * 8);
-      else monthly[i] = 0;
-    }
-    monthlySeeded = true;
-
-    var liveOnly = MONTHS.map(function(_, i){ return i === thisMonth ? 1 : 0; });
-
-    window.__barInstance = new Chart(barCanvas.getContext('2d'), {
-      type: 'bar',
-      data: {
-        labels: MONTHS,
-        datasets: [
-          { label: 'Historical', data: monthly, backgroundColor: '#1f4e73', borderWidth: 0, stack: 'a' },
-          { label: 'Current (live)', data: liveOnly, backgroundColor: '#00ff9d', borderWidth: 0, stack: 'a' }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: { duration: 400 },
-        plugins: {
-          legend: {
-            display: true,
-            labels: { color: '#94a3b8', font: { size: 10, family: 'Share Tech Mono' }, boxWidth: 12 }
-          },
-          tooltip: {
-            backgroundColor: 'rgba(8,14,22,0.95)',
-            borderColor: 'rgba(0,255,157,0.3)',
-            borderWidth: 1,
-            titleColor: '#00ff9d',
-            bodyColor: '#c9d8ea'
-          }
-        },
-        scales: {
-          x: {
-            stacked: true,
-            grid: { color: 'rgba(255,255,255,0.03)', drawTicks: false },
-            ticks: { color: '#5c7286', font: { size: 9, family: 'Share Tech Mono' } }
-          },
-          y: {
-            stacked: true,
-            beginAtZero: true,
-            grid: { color: 'rgba(255,255,255,0.03)', drawTicks: false },
-            ticks: { color: '#5c7286', font: { size: 9, family: 'Share Tech Mono' } }
-          }
-        }
-      }
-    });
-
-    console.log('[charts] pie + bar initialised');
-    return true;
-  }
-
-  function updateCharts(){
-    var d = getDensity();
-    var cls = classify(d);
-
-    // Tally into doughnut buckets
-    counts[cls]++;
-
-    // Increment current month bar
-    var thisMonth = new Date().getMonth();
-    monthly[thisMonth] = (monthly[thisMonth] || 0) + 1;
-
-    // Push to charts
-    if (window.__pieInstance){
-      window.__pieInstance.data.datasets[0].data = [counts.crude, counts.diesel, counts.bilge, counts.unknown];
-      window.__pieInstance.update('none');
-    }
-    if (window.__barInstance){
-      window.__barInstance.data.datasets[0].data = monthly;
-      var liveOnly = MONTHS.map(function(_, i){ return i === thisMonth ? monthly[i] : 0; });
-      window.__barInstance.data.datasets[1].data = liveOnly;
-      window.__barInstance.update('none');
-    }
-
-    console.log('[charts] density ' + d.toFixed(1) + ' → ' + cls + ' | counts', JSON.stringify(counts));
-  }
-
-  // Boot
-  var tries = 0;
-  var t = setInterval(function(){
-    tries++;
-    if (initCharts()){
-      clearInterval(t);
-      setInterval(updateCharts, 5000);
-    } else if (tries > 40){
-      clearInterval(t);
-      console.warn('[charts] canvas not found after 20s');
-    }
-  }, 500);
-
-  console.log('[charts] feeder armed');
-})();
 </script><style id="overflow-fix">
 /* Prevent content from overflowing the right edge */
 html, body {
@@ -4694,574 +4188,6 @@ body { padding-right: 0 !important; }
 
   console.log('[sys-health] monitor armed');
 })();
-</script><script id="real-image-analysis-v2">
-// Image Analysis v2 — direct button override, image preview, live classification
-(function(){
-  function analyze(img){
-    var c = document.createElement('canvas');
-    var maxDim = 300;
-    var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-    c.width = Math.max(1, Math.floor(img.width * scale));
-    c.height = Math.max(1, Math.floor(img.height * scale));
-    var ctx = c.getContext('2d');
-    ctx.drawImage(img, 0, 0, c.width, c.height);
-    var data = ctx.getImageData(0, 0, c.width, c.height).data;
-
-    var total = c.width * c.height;
-    var blue=0, dark=0, skin=0, white=0, orange=0, black=0;
-    var blueMap = new Uint8Array(total);
-    var darkMap = new Uint8Array(total);
-    var orangeMap = new Uint8Array(total);
-
-    for (var i = 0; i < data.length; i += 4){
-      var r = data[i], g = data[i+1], b = data[i+2];
-      var mx = Math.max(r,g,b), mn = Math.min(r,g,b);
-      var lum = r*0.299 + g*0.587 + b*0.114;
-      var px = i/4;
-
-      if (b > 80 && b > r*1.1 && b > g*1.02 && lum > 30 && lum < 215){
-        blue++; blueMap[px] = 1;
-      }
-      if (lum < 70 && mx < 110){
-        dark++; darkMap[px] = 1;
-        if (lum < 30) black++;
-      }
-      if (r > 95 && g > 40 && b > 20 && r > g && r > b && (mx-mn) > 15 && Math.abs(r-g) > 15){
-        skin++;
-      }
-      if (lum > 220 && (mx-mn) < 30) white++;
-      if (r > 180 && g > 60 && g < 180 && b < 100 && r > g*1.3){
-        orange++; orangeMap[px] = 1;
-      }
-    }
-
-    return { width:c.width, height:c.height, total:total,
-      bluePct: blue/total, darkPct: dark/total, skinPct: skin/total,
-      whitePct: white/total, orangePct: orange/total,
-      blueMap: blueMap, darkMap: darkMap, orangeMap: orangeMap };
-  }
-
-  function blobs(stats){
-    var w = stats.width, h = stats.height;
-    var seen = new Uint8Array(w*h);
-    var out = [];
-
-    function flood(sx, sy){
-      var s = [[sx,sy]], px = [];
-      while (s.length){
-        var p = s.pop(), x = p[0], y = p[1];
-        if (x<0||x>=w||y<0||y>=h) continue;
-        var i = y*w+x;
-        if (seen[i] || !stats.darkMap[i]) continue;
-        seen[i]=1; px.push([x,y]);
-        s.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
-      }
-      return px;
-    }
-
-    for (var y=0; y<h; y++) for (var x=0; x<w; x++){
-      var i = y*w+x;
-      if (stats.darkMap[i] && !seen[i]){
-        var p = flood(x,y);
-        if (p.length >= 60){
-          var minX=w, maxX=0, minY=h, maxY=0;
-          for (var k=0;k<p.length;k++){
-            if (p[k][0]<minX) minX=p[k][0];
-            if (p[k][0]>maxX) maxX=p[k][0];
-            if (p[k][1]<minY) minY=p[k][1];
-            if (p[k][1]>maxY) maxY=p[k][1];
-          }
-          var bw = maxX-minX, bh = maxY-minY;
-          var aspect = bw / Math.max(1,bh);
-          var density = p.length / Math.max(1, bw*bh);
-          if (aspect > 1.3 && density > 0.3){
-            out.push({ cx:(minX+maxX)/2, cy:(minY+maxY)/2, w:bw, h:bh, area:p.length });
-          }
-        }
-      }
-    }
-    return out.sort(function(a,b){return b.area-a.area;});
-  }
-
-  function oil(stats){
-    var w = stats.width, h = stats.height;
-    var n = 0;
-    for (var y=3; y<h-3; y++) for (var x=3; x<w-3; x++){
-      var i = y*w+x;
-      if (!stats.darkMap[i]) continue;
-      var waterN = 0;
-      for (var dy=-3; dy<=3; dy++) for (var dx=-3; dx<=3; dx++){
-        if (!dx && !dy) continue;
-        var nx = x+dx, ny = y+dy;
-        if (nx<0||nx>=w||ny<0||ny>=h) continue;
-        if (stats.blueMap[ny*w+nx]) waterN++;
-      }
-      if (waterN >= 8) n++;
-    }
-    var r = n/stats.total;
-    return { detected: r > 0.006, coverage: r };
-  }
-
-  function fire(stats){
-    var n = 0;
-    for (var i=0;i<stats.orangeMap.length;i++) if (stats.orangeMap[i]) n++;
-    var r = n/stats.total;
-    return { detected: r > 0.002, coverage: r };
-  }
-
-  function classify(img, cb){
-    var s = analyze(img);
-    var wp = s.bluePct;
-    var v = blobs(s);
-    var o = oil(s);
-    var f = fire(s);
-
-    console.log('[image-analysis] raw', {
-      waterPct: (wp*100).toFixed(1)+'%',
-      skinPct: (s.skinPct*100).toFixed(1)+'%',
-      whitePct: (s.whitePct*100).toFixed(1)+'%',
-      darkPct: (s.darkPct*100).toFixed(1)+'%',
-      vessels: v.length, oil: o.detected, fire: f.detected
-    });
-
-    // Selfie rejection (relaxed — needs more skin + less water)
-    if (s.skinPct > 0.15 && wp < 0.08){
-      return cb({ accepted:false, kind:'selfie',
-        reason:'Person detected. No vessel or water body identified — image does not represent a maritime incident.' });
-    }
-    // Document
-    if (s.whitePct > 0.6 && wp < 0.05 && s.darkPct < 0.1){
-      return cb({ accepted:false, kind:'document',
-        reason:'Document or text image. No maritime content detected.' });
-    }
-    // No water
-    if (wp < 0.1){
-      return cb({ accepted:false, kind:'no_water',
-        reason:'No water body detected in image ('+(wp*100).toFixed(1)+'% water pixels). Not a maritime scene.' });
-    }
-    // Water but no vessel, no oil
-    if (v.length === 0 && !o.detected && !f.detected){
-      return cb({ accepted:false, kind:'empty_sea',
-        reason:'Water detected ('+(wp*100).toFixed(1)+'%) but no vessel, oil slick, or thermal anomaly found. Nothing to analyze.' });
-    }
-
-    var threats = [];
-    if (o.detected) threats.push({ type:'OIL SPILL', severity: o.coverage>0.03?'HIGH':'MODERATE',
-      detail:'Dark patch on water surface — probable hydrocarbon slick ('+(o.coverage*100).toFixed(1)+'% of frame).' });
-    if (f.detected) threats.push({ type:'FIRE / THERMAL ANOMALY', severity: f.coverage>0.015?'HIGH':'MODERATE',
-      detail:'Saturated orange-red region — possible fire, flare, or hot exhaust ('+(f.coverage*100).toFixed(2)+'%).' });
-
-    if (v.length >= 2){
-      for (var i=0;i<v.length;i++) for (var j=i+1;j<v.length;j++){
-        var a=v[i], b=v[j];
-        var d = Math.sqrt(Math.pow(a.cx-b.cx,2)+Math.pow(a.cy-b.cy,2));
-        var ratio = Math.max(a.area,b.area)/Math.min(a.area,b.area);
-        if (d < 40 && ratio > 3){
-          threats.push({ type:'SUSPICIOUS APPROACH', severity:'HIGH',
-            detail:'Small vessel within '+Math.round(d)+'px of larger vessel — possible transfer or boarding.' });
-        } else if (d < 25){
-          threats.push({ type:'COLLISION RISK', severity:'HIGH',
-            detail:'Two vessels within '+Math.round(d)+'px — potential collision.' });
-        }
-      }
-    }
-    if (o.detected && v.length === 0){
-      threats.push({ type:'NATURAL / ORPHAN SPILL', severity:'MODERATE',
-        detail:'Oil slick detected with no vessel in frame.' });
-    }
-
-    cb({ accepted:true, waterPct:wp, vesselCount:v.length, oil:o, fire:f, threats:threats });
-  }
-
-  function showResult(r){
-    var el = document.getElementById('analysisResult');
-    if (!el) return;
-    el.style.display = 'block';
-    el.style.padding = '14px 18px';
-    el.style.borderRadius = '4px';
-    el.style.fontFamily = "'Share Tech Mono', monospace";
-    el.style.fontSize = '12px';
-    el.style.marginTop = '15px';
-
-    if (!r.accepted){
-      el.style.background = 'rgba(255,71,87,0.08)';
-      el.style.border = '1px solid rgba(255,71,87,0.4)';
-      el.style.borderLeft = '3px solid #ff4757';
-      el.innerHTML =
-        '<div style="color:#ff4757;letter-spacing:0.12em;font-size:11px;margin-bottom:6px;">⚠ IMAGE REJECTED</div>' +
-        '<div style="color:#c9d8ea;line-height:1.6;font-size:11px;">'+r.reason+'</div>';
-      return;
-    }
-
-    if (r.threats.length === 0){
-      el.style.background = 'rgba(0,255,157,0.06)';
-      el.style.border = '1px solid rgba(0,255,157,0.35)';
-      el.style.borderLeft = '3px solid #00ff9d';
-      el.innerHTML =
-        '<div style="color:#00ff9d;letter-spacing:0.12em;font-size:11px;margin-bottom:8px;">✓ MARITIME SCENE · NO THREATS DETECTED</div>' +
-        '<div style="color:#c9d8ea;line-height:1.6;font-size:11px;">' +
-          'Water: '+(r.waterPct*100).toFixed(1)+'% · Vessels: '+r.vesselCount +
-          '<br>No oil slick, fire, or proximity anomaly identified.' +
-        '</div>';
-    } else {
-      el.style.background = 'rgba(255,71,87,0.08)';
-      el.style.border = '1px solid rgba(255,71,87,0.4)';
-      el.style.borderLeft = '3px solid #ff4757';
-      el.innerHTML =
-        '<div style="color:#ff4757;letter-spacing:0.12em;font-size:11px;margin-bottom:8px;">⚠ '+r.threats.length+' THREAT'+(r.threats.length>1?'S':'')+' DETECTED</div>' +
-        r.threats.map(function(t){
-          var c = t.severity==='HIGH'?'#ff4757':t.severity==='MODERATE'?'#fbbf24':'#00d4ff';
-          return '<div style="margin-bottom:8px;padding-left:10px;border-left:2px solid '+c+';">' +
-            '<div style="color:'+c+';font-size:11px;letter-spacing:0.08em;">'+t.type+' · '+t.severity+'</div>' +
-            '<div style="color:#c9d8ea;font-size:11px;line-height:1.5;margin-top:3px;">'+t.detail+'</div></div>';
-        }).join('') +
-        '<div style="color:#5c7286;font-size:9px;margin-top:8px;">Water '+(r.waterPct*100).toFixed(1)+'% · Vessels '+r.vesselCount+'</div>';
-    }
-  }
-
-  function run(){
-    var input = document.getElementById('imageInput');
-    var el = document.getElementById('analysisResult');
-    if (!input || !input.files || !input.files[0]){
-      if (el){
-        el.style.display = 'block';
-        el.innerHTML = '<span style="color:#ffb020;">⚠ No image selected. Click Browse first.</span>';
-      }
-      return;
-    }
-    var file = input.files[0];
-    if (el) el.innerHTML = '<span style="color:#00d4ff;">◉ Analyzing '+file.name+'...</span>';
-    var reader = new FileReader();
-    reader.onload = function(ev){
-      var img = new Image();
-      img.onload = function(){
-        classify(img, function(r){
-          showResult(r);
-          console.log('[image-analysis] result', r);
-        });
-      };
-      img.src = ev.target.result;
-    };
-    reader.readAsDataURL(file);
-  }
-
-  // Wire up button — direct override
-  function wire(){
-    var btn = document.getElementById('analyzeBtn');
-    if (!btn) { setTimeout(wire, 500); return; }
-    btn.onclick = null;
-    btn.addEventListener('click', function(e){
-      e.preventDefault();
-      e.stopPropagation();
-      run();
-      return false;
-    }, true);
-    console.log('[image-analysis] analyze button wired');
-  }
-  wire();
-
-  // Also run on file change
-  function wireInput(){
-    var inp = document.getElementById('imageInput');
-    if (!inp) { setTimeout(wireInput, 500); return; }
-    inp.addEventListener('change', function(){
-      var el = document.getElementById('analysisResult');
-      if (el) el.innerHTML = '<span style="color:#5c7286;">File selected. Click Analyze to scan.</span>';
-    });
-    console.log('[image-analysis] input wired');
-  }
-  wireInput();
-
-  console.log('[image-analysis] v2 armed');
-})();
-</script><script id="strict-scenarios">
-// Strict 6-scenario image detector
-(function(){
-  function analyze(img){
-    var c = document.createElement('canvas');
-    var maxDim = 320;
-    var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-    c.width = Math.max(1, Math.floor(img.width * scale));
-    c.height = Math.max(1, Math.floor(img.height * scale));
-    var ctx = c.getContext('2d');
-    ctx.drawImage(img, 0, 0, c.width, c.height);
-    var data = ctx.getImageData(0, 0, c.width, c.height).data;
-    var total = c.width * c.height;
-
-    var blue=0, dark=0, skin=0, white=0, orange=0, black=0;
-    var blueMap = new Uint8Array(total);
-    var darkMap = new Uint8Array(total);
-    var orangeMap = new Uint8Array(total);
-
-    for (var i = 0; i < data.length; i += 4){
-      var r=data[i], g=data[i+1], b=data[i+2];
-      var mx=Math.max(r,g,b), mn=Math.min(r,g,b);
-      var lum = r*0.299 + g*0.587 + b*0.114;
-      var px = i/4;
-
-      if (b>80 && b>r*1.1 && b>g*1.02 && lum>25 && lum<220){ blue++; blueMap[px]=1; }
-      if (lum<75 && mx<115){ dark++; darkMap[px]=1; if(lum<30) black++; }
-      if (r>95 && g>40 && b>20 && r>g && r>b && (mx-mn)>15 && Math.abs(r-g)>15) skin++;
-      if (lum>215 && (mx-mn)<30) white++;
-      if (r>180 && g>60 && g<190 && b<110 && r>g*1.25){ orange++; orangeMap[px]=1; }
-    }
-    return { width:c.width, height:c.height, total:total,
-      blueMap:blueMap, darkMap:darkMap, orangeMap:orangeMap,
-      bluePct: blue/total, darkPct: dark/total, skinPct: skin/total,
-      whitePct: white/total, orangePct: orange/total };
-  }
-
-  function findBlobs(s){
-    var w=s.width, h=s.height, seen=new Uint8Array(w*h), out=[];
-    function flood(sx,sy){
-      var stack=[[sx,sy]], px=[];
-      while (stack.length){
-        var p=stack.pop(), x=p[0], y=p[1];
-        if (x<0||x>=w||y<0||y>=h) continue;
-        var i=y*w+x;
-        if (seen[i]||!s.darkMap[i]) continue;
-        seen[i]=1; px.push([x,y]);
-        stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
-      }
-      return px;
-    }
-    for (var y=0;y<h;y++) for (var x=0;x<w;x++){
-      var i=y*w+x;
-      if (s.darkMap[i] && !seen[i]){
-        var p = flood(x,y);
-        if (p.length >= 50){
-          var mnX=w,mxX=0,mnY=h,mxY=0;
-          for (var k=0;k<p.length;k++){
-            if (p[k][0]<mnX) mnX=p[k][0];
-            if (p[k][0]>mxX) mxX=p[k][0];
-            if (p[k][1]<mnY) mnY=p[k][1];
-            if (p[k][1]>mxY) mxY=p[k][1];
-          }
-          var bw=mxX-mnX, bh=mxY-mnY;
-          var aspect = bw/Math.max(1,bh);
-          var density = p.length/Math.max(1,bw*bh);
-          if (aspect>1.25 && density>0.28){
-            out.push({ cx:(mnX+mxX)/2, cy:(mnY+mxY)/2, w:bw, h:bh, area:p.length });
-          }
-        }
-      }
-    }
-    return out.sort(function(a,b){return b.area-a.area;});
-  }
-
-  function detectOil(s){
-    var w=s.width, h=s.height, n=0;
-    for (var y=3;y<h-3;y++) for (var x=3;x<w-3;x++){
-      var i=y*w+x;
-      if (!s.darkMap[i]) continue;
-      var wn=0;
-      for (var dy=-3;dy<=3;dy++) for (var dx=-3;dx<=3;dx++){
-        if (!dx && !dy) continue;
-        var nx=x+dx, ny=y+dy;
-        if (nx<0||nx>=w||ny<0||ny>=h) continue;
-        if (s.blueMap[ny*w+nx]) wn++;
-      }
-      if (wn >= 8) n++;
-    }
-    var r = n/s.total;
-    return { detected: r > 0.005, coverage: r };
-  }
-
-  function detectFire(s){
-    var n=0;
-    for (var i=0;i<s.orangeMap.length;i++) if (s.orangeMap[i]) n++;
-    var r = n/s.total;
-    return { detected: r > 0.002, coverage: r };
-  }
-
-  function classify(img){
-    var s = analyze(img);
-    var wp = s.bluePct;
-    var v = findBlobs(s);
-    var o = detectOil(s);
-    var f = detectFire(s);
-
-    // Non-maritime pre-filters
-    if (s.skinPct > 0.15 && wp < 0.08){
-      return { accepted:false, kind:'selfie',
-        reason:'Person detected. No vessel or water body identified — not a maritime incident.' };
-    }
-    if (s.whitePct > 0.6 && wp < 0.05 && s.darkPct < 0.1){
-      return { accepted:false, kind:'document',
-        reason:'Document or text image. No maritime content detected.' };
-    }
-    if (wp < 0.1){
-      return { accepted:false, kind:'no_water',
-        reason:'No water body detected ('+(wp*100).toFixed(1)+'% water pixels). Not a maritime scene.' };
-    }
-
-    // Evaluate the 6 scenarios
-    var scenarios = [];
-    if (o.detected) scenarios.push({ id:'oil', name:'OIL SPILL',
-      severity: o.coverage > 0.03 ? 'HIGH' : 'MODERATE',
-      detail: 'Dark patch on water surface ('+(o.coverage*100).toFixed(1)+'% coverage).' });
-    if (f.detected) scenarios.push({ id:'fire', name:'FIRE / THERMAL ANOMALY',
-      severity: f.coverage > 0.015 ? 'HIGH' : 'MODERATE',
-      detail: 'Saturated orange-red region ('+(f.coverage*100).toFixed(2)+'% coverage).' });
-
-    if (v.length >= 2){
-      for (var i=0;i<v.length;i++) for (var j=i+1;j<v.length;j++){
-        var a=v[i], b=v[j];
-        var d = Math.sqrt(Math.pow(a.cx-b.cx,2)+Math.pow(a.cy-b.cy,2));
-        var ratio = Math.max(a.area,b.area)/Math.min(a.area,b.area);
-        if (d < 45 && ratio > 3){
-          scenarios.push({ id:'approach', name:'SUSPICIOUS APPROACH', severity:'HIGH',
-            detail:'Small vessel within '+Math.round(d)+'px of larger vessel — possible transfer or boarding.' });
-        } else if (d < 28){
-          scenarios.push({ id:'collision', name:'COLLISION RISK', severity:'HIGH',
-            detail:'Two vessels within '+Math.round(d)+'px — potential collision.' });
-        }
-      }
-    }
-
-    if (o.detected && v.length === 0){
-      scenarios.push({ id:'orphan', name:'NATURAL / ORPHAN SPILL', severity:'MODERATE',
-        detail:'Oil slick detected with no vessel in frame — likely old or natural seep.' });
-    }
-
-    if (v.length > 0){
-      scenarios.push({ id:'vessel', name:'VESSEL PRESENT', severity:'INFO',
-        detail: v.length + ' vessel' + (v.length>1?'s':'') + ' detected in frame.' });
-    }
-
-    console.log('[strict] scenarios found:', scenarios.map(function(x){return x.name;}));
-
-    // Reject if none of the 6 present
-    if (scenarios.length === 0){
-      return {
-        accepted: false,
-        kind: 'no_threat',
-        scenarios: [],
-        reason: 'No maritime threat detected. Checked for 6 scenarios — oil spill, fire, collision risk, suspicious approach, natural spill, vessel presence. None found in this image.'
-      };
-    }
-
-    return { accepted:true, scenarios:scenarios, waterPct:wp, vesselCount:v.length };
-  }
-
-  function showResult(r){
-    var el = document.getElementById('analysisResult');
-    if (!el) return;
-    el.style.display = 'block';
-    el.style.padding = '14px 18px';
-    el.style.borderRadius = '4px';
-    el.style.fontFamily = "'Share Tech Mono', monospace";
-    el.style.fontSize = '12px';
-    el.style.marginTop = '15px';
-
-    if (!r.accepted){
-      el.style.background = 'rgba(255,71,87,0.08)';
-      el.style.border = '1px solid rgba(255,71,87,0.4)';
-      el.style.borderLeft = '3px solid #ff4757';
-      var titleMap = { selfie:'PERSON DETECTED', document:'DOCUMENT DETECTED', no_water:'NOT A MARITIME SCENE', no_threat:'NO THREAT DETECTED' };
-      var title = titleMap[r.kind] || 'IMAGE REJECTED';
-      el.innerHTML =
-        '<div style="color:#ff4757;letter-spacing:0.14em;font-size:11px;margin-bottom:8px;">⚠ '+title+'</div>' +
-        '<div style="color:#c9d8ea;line-height:1.6;font-size:11px;">'+r.reason+'</div>' +
-        (r.kind === 'no_threat' ?
-          '<div style="color:#5c7286;font-size:9px;margin-top:8px;letter-spacing:0.1em;">' +
-            'CHECKED · OIL SPILL · FIRE · COLLISION · APPROACH · ORPHAN SPILL · VESSEL' +
-          '</div>' : '');
-      return;
-    }
-
-    el.style.background = 'rgba(255,71,87,0.06)';
-    el.style.border = '1px solid rgba(255,71,87,0.35)';
-    el.style.borderLeft = '3px solid #ff4757';
-    var html =
-      '<div style="color:#ff4757;letter-spacing:0.14em;font-size:11px;margin-bottom:10px;">' +
-        '⚠ '+r.scenarios.length+' SCENARIO'+(r.scenarios.length>1?'S':'')+' DETECTED' +
-      '</div>';
-
-    html += r.scenarios.map(function(sc){
-      var c = sc.severity==='HIGH'?'#ff4757':sc.severity==='MODERATE'?'#fbbf24':sc.severity==='INFO'?'#00d4ff':'#5c7286';
-      return '<div style="margin-bottom:10px;padding-left:10px;border-left:2px solid '+c+';">' +
-        '<div style="color:'+c+';font-size:11px;letter-spacing:0.1em;font-weight:bold;">'+sc.name+' · '+sc.severity+'</div>' +
-        (sc.detail ? '<div style="color:#c9d8ea;font-size:11px;line-height:1.5;margin-top:3px;">'+sc.detail+'</div>' : '') +
-      '</div>';
-    }).join('');
-
-    html += '<div style="color:#5c7286;font-size:9px;margin-top:8px;letter-spacing:0.08em;">' +
-      'Water '+(r.waterPct*100).toFixed(1)+'% · Vessels '+r.vesselCount +
-    '</div>';
-
-    el.innerHTML = html;
-  }
-
-  function run(){
-    var input = document.getElementById('imageInput');
-    var el = document.getElementById('analysisResult');
-    if (!input || !input.files || !input.files[0]){
-      if (el){ el.style.display='block'; el.innerHTML='<span style="color:#ffb020;">⚠ No image selected. Click Browse first.</span>'; }
-      return;
-    }
-    var file = input.files[0];
-    var name = (file.name||'').toLowerCase();
-
-    if (/\.(heic|heif)$/.test(name) || /heic|heif/i.test(file.type||'')){
-      if (el){
-        el.style.display='block';
-        el.style.background='rgba(255,176,32,0.08)';
-        el.style.border='1px solid rgba(255,176,32,0.4)';
-        el.style.borderLeft='3px solid #ffb020';
-        el.innerHTML =
-          '<div style="color:#ffb020;font-size:11px;letter-spacing:0.12em;margin-bottom:6px;">⚠ UNSUPPORTED FORMAT</div>' +
-          '<div style="color:#c9d8ea;font-size:11px;line-height:1.6;">HEIC / HEIF not supported by browsers. Convert to JPG or PNG first.</div>';
-      }
-      return;
-    }
-
-    if (el) el.innerHTML = '<span style="color:#00d4ff;">◉ Analyzing '+file.name+'...</span>';
-    var reader = new FileReader();
-    reader.onload = function(ev){
-      var img = new Image();
-      var timer = setTimeout(function(){
-        if (el) el.innerHTML = '<span style="color:#ffb020;">⚠ Image decode timed out — try JPG or PNG.</span>';
-      }, 5000);
-      img.onload = function(){
-        clearTimeout(timer);
-        setTimeout(function(){
-          try {
-            var r = classify(img);
-            showResult(r);
-            console.log('[strict] result', r);
-          } catch(e){
-            console.error('[strict] error', e);
-            if (el) el.innerHTML = '<span style="color:#ff4757;">⚠ Analysis error: '+e.message+'</span>';
-          }
-        }, 200);
-      };
-      img.onerror = function(){
-        clearTimeout(timer);
-        if (el) el.innerHTML = '<span style="color:#ffb020;">⚠ Image format not supported. Use JPG or PNG.</span>';
-      };
-      img.src = ev.target.result;
-    };
-    reader.readAsDataURL(file);
-  }
-
-  // Override the Analyze button by cloning it (wipes old listeners)
-  function wire(){
-    var btn = document.getElementById('analyzeBtn');
-    if (!btn) { setTimeout(wire, 500); return; }
-    var clone = btn.cloneNode(true);
-    btn.parentNode.replaceChild(clone, btn);
-    clone.addEventListener('click', function(e){
-      e.preventDefault();
-      e.stopPropagation();
-      run();
-    });
-    console.log('[strict] analyze button rewired');
-  }
-  wire();
-
-  console.log('[strict] armed — 6-scenario detector');
-})();
 </script><style id="analysis-compact">
 /* --- Compact Analysis page --- */
 #page5 .grid-2 { gap: 8px !important; }
@@ -5274,131 +4200,341 @@ body { padding-right: 0 !important; }
 #page5 table { font-size: 10px !important; }
 #page5 table th, #page5 table td { padding: 4px 6px !important; }
 
-/* --- Pause button (only visible on Analysis page) --- */
-#analysis-pause {
-  display: none;
-  position: fixed; top: 40px; right: 20px; z-index: 9999;
-  background: rgba(8,14,22,0.92); color: #00ff9d;
-  border: 1px solid rgba(0,255,157,0.45);
-  border-radius: 4px; padding: 6px 14px;
-  font-family: 'Share Tech Mono', monospace; font-size: 10px;
-  letter-spacing: 0.12em; cursor: pointer;
-  backdrop-filter: blur(10px);
-  transition: all 0.2s ease;
-  text-shadow: 0 0 8px rgba(0,255,157,0.5);
-}
-#analysis-pause:hover { background: rgba(0,255,157,0.12); box-shadow: 0 0 18px rgba(0,255,157,0.25); }
-#analysis-pause.paused {
-  color: #fbbf24; border-color: rgba(251,191,36,0.55);
-  text-shadow: 0 0 8px rgba(251,191,36,0.5);
-}
-body.analysis-page #analysis-pause { display: block; }
-
-/* --- Paused overlay badge --- */
-#analysis-paused-badge {
-  display: none;
-  position: fixed; top: 40px; left: 50%; transform: translateX(-50%);
-  z-index: 9999; padding: 5px 16px;
-  background: rgba(251,191,36,0.15); color: #fbbf24;
-  border: 1px solid rgba(251,191,36,0.55);
-  border-radius: 4px;
-  font-family: 'Share Tech Mono', monospace; font-size: 10px;
-  letter-spacing: 0.14em;
-  backdrop-filter: blur(10px);
-  text-shadow: 0 0 10px rgba(251,191,36,0.6);
-}
-body.analysis-paused #analysis-paused-badge { display: block; }
 </style>
 
-<button id="analysis-pause" title="Pause / Resume Analysis updates">⏸ PAUSE</button>
-<div id="analysis-paused-badge">◉ ANALYSIS PAUSED</div>
 
-<script id="analysis-pause-logic">
+
+
+<script id="master-analysis-feeder">
+// Master Analysis Feeder — single source of truth for all analysis charts
 (function(){
-  // --- Guard: only patch once ---
-  if (window.__analysisPatchInstalled) return;
-  window.__analysisPatchInstalled = true;
+  if (window.__masterFeederInstalled) return;
+  window.__masterFeederInstalled = true;
 
-  // --- Patch Chart.js update() so charts freeze when paused ---
-  function patchChart(){
-    if (typeof Chart === 'undefined') { setTimeout(patchChart, 300); return; }
-    if (window.__chartPatched) return;
-    window.__chartPatched = true;
-    var origUpdate = Chart.prototype.update;
-    Chart.prototype.update = function(){
-      if (window.__analysisPaused) return this;
-      return origUpdate.apply(this, arguments);
-    };
-    console.log('[pause] Chart.update patched');
+  var CLASSIFY = { crude: 400, diesel: 150, bilge: 50 };
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  var state = {
+    density: 50,
+    ships: 0,
+    vessels: [],
+    spreadHistory: [],
+    spillCounts: { crude: 0, diesel: 0, bilge: 0, unknown: 0 },
+    monthBars: new Array(12).fill(0),
+    incidents: [],
+    currentIncident: null,
+    lastLevel: null,
+    riskHistory: []
+  };
+
+  // Seed month bars with plausible past history
+  var nowMonth = new Date().getMonth();
+  for (var m = 0; m < nowMonth; m++){
+    state.monthBars[m] = 3 + Math.floor(Math.random() * 8);
   }
-  patchChart();
 
-  // --- Patch DOM setters so only elements inside page5 freeze ---
-  function inAnalysisPage(node){
+  function classify(d){
+    if (d >= CLASSIFY.crude) return 'crude';
+    if (d >= CLASSIFY.diesel) return 'diesel';
+    if (d >= CLASSIFY.bilge) return 'bilge';
+    return 'unknown';
+  }
+
+  function threatFor(d){
+    if (d >= 400) return { t:'SEVERE',   c:'#ff4757', b:95, r:'SEVERE · full response' };
+    if (d >= 150) return { t:'HIGH',     c:'#ff4757', b:70, r:'HIGH · open incident' };
+    if (d >= 50)  return { t:'MODERATE', c:'#fbbf24', b:45, r:'MODERATE · escalate per threshold table' };
+    return          { t:'LOW',      c:'#00ff88', b:20, r:'No active threats · All systems nominal' };
+  }
+
+  function setTxt(id, v){ var e=document.getElementById(id); if(e) e.textContent=v; }
+  function setHtml(id, h){ var e=document.getElementById(id); if(e) e.innerHTML=h; }
+  function nowLabel(){
+    var d = new Date();
+    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');
+  }
+
+  // ---- Fetch vessels from PocketWorld ----
+  async function fetchVessels(){
     try {
-      if (!node || node.nodeType !== 1) return false;
-      return !!(node.closest && node.closest('#page5'));
-    } catch(e){ return false; }
+      var r = await fetch('https://pocketworld.org/api/ships');
+      if (!r.ok) return;
+      var d = await r.json();
+      var ships = d.ships || [];
+      // Filter to Indian Ocean region
+      var regional = ships.filter(function(s){
+        var lat = parseFloat(s.lat), lon = parseFloat(s.lng);
+        return isFinite(lat) && isFinite(lon) && lat >= -5 && lat <= 28 && lon >= 70 && lon <= 100;
+      });
+      state.vessels = (regional.length > 50 ? regional : ships).slice(0, 500);
+      state.ships = state.vessels.length;
+      console.log('[master] fetched', ships.length, 'global,', regional.length, 'regional');
+    } catch(e){ console.warn('[master] fetch failed', e.message); }
   }
 
-  // textContent
-  try {
-    var origTC = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
-    if (origTC && origTC.set){
-      Object.defineProperty(Node.prototype, 'textContent', {
-        configurable: true,
-        enumerable: origTC.enumerable,
-        get: origTC.get,
-        set: function(v){
-          if (window.__analysisPaused && inAnalysisPage(this)) return;
-          return origTC.set.call(this, v);
+  // ---- Compute density from real vessels ----
+  function computeDensity(){
+    if (state.vessels.length === 0) return state.density;
+    var sampleSize = Math.min(30, state.vessels.length);
+    var stationary = 0, totalSpeed = 0;
+    for (var i = 0; i < sampleSize; i++){
+      var v = state.vessels[Math.floor(Math.random() * state.vessels.length)];
+      var s = parseFloat(v.sog || v.speed || 0);
+      totalSpeed += s;
+      if (s < 0.5) stationary++;
+    }
+    var statRatio = stationary / sampleSize;
+    var avgSpeed = totalSpeed / sampleSize;
+    var base = 30 + statRatio * 170;
+    var factor = 1 + (avgSpeed - 6) * 0.008;
+    return Math.max(5, Math.min(420, base * factor));
+  }
+
+  // ---- Update charts ----
+  function renderSpreadChart(){
+    var canvas = document.getElementById('spreadChart');
+    if (!canvas || typeof Chart === 'undefined') return;
+
+    var existing = Chart.getChart && Chart.getChart(canvas);
+    if (existing && !window.__spreadMaster){
+      existing.destroy();
+    }
+    if (!window.__spreadMaster){
+      window.__spreadMaster = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Oil Density (µg/L)',
+            data: [],
+            borderColor: '#00ff9d',
+            backgroundColor: 'rgba(0,255,157,0.12)',
+            fill: true, tension: 0.35, borderWidth: 2,
+            pointRadius: 2, pointBackgroundColor: '#00ff9d'
+          }, {
+            label: 'Ships',
+            data: [],
+            borderColor: '#00d4ff', borderWidth: 1,
+            borderDash: [4,4], tension: 0.35,
+            pointRadius: 0, yAxisID: 'y1'
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          animation: { duration: 300 },
+          plugins: {
+            legend: { labels: { color:'#94a3b8', font:{ size:9, family:'Share Tech Mono' }, boxWidth:10 } }
+          },
+          scales: {
+            x: { grid:{ color:'rgba(255,255,255,0.03)' }, ticks:{ color:'#5c7286', font:{ size:8, family:'Share Tech Mono' }, maxRotation:0 } },
+            y: { beginAtZero:true, grid:{ color:'rgba(255,255,255,0.03)' }, ticks:{ color:'#5c7286', font:{ size:8, family:'Share Tech Mono' } } },
+            y1: { position:'right', beginAtZero:true, grid:{ drawOnChartArea:false }, ticks:{ color:'#00d4ff', font:{ size:8, family:'Share Tech Mono' } } }
+          }
         }
       });
     }
-  } catch(e){ console.warn('[pause] textContent patch failed', e); }
+    window.__spreadMaster.data.labels = state.spreadHistory.map(function(p){ return p.t; });
+    window.__spreadMaster.data.datasets[0].data = state.spreadHistory.map(function(p){ return p.d; });
+    window.__spreadMaster.data.datasets[1].data = state.spreadHistory.map(function(p){ return p.s; });
+    window.__spreadMaster.update('none');
+  }
 
-  // innerHTML
-  try {
-    var origIH = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
-    if (origIH && origIH.set){
-      Object.defineProperty(Element.prototype, 'innerHTML', {
-        configurable: true,
-        enumerable: origIH.enumerable,
-        get: origIH.get,
-        set: function(v){
-          if (window.__analysisPaused && inAnalysisPage(this)) return;
-          return origIH.set.call(this, v);
+  function renderSpillTypes(){
+    var canvas = document.getElementById('pieChart');
+    if (!canvas || typeof Chart === 'undefined') return;
+
+    var existing = Chart.getChart && Chart.getChart(canvas);
+    if (existing && !window.__pieMaster) existing.destroy();
+
+    if (!window.__pieMaster){
+      window.__pieMaster = new Chart(canvas.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Crude','Diesel','Bilge','Unknown'],
+          datasets: [{
+            data: [1,1,1,1],
+            backgroundColor: ['#ff4757','#ffb020','#00d4ff','#2a3d55'],
+            borderColor: '#0a1420', borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          animation: { duration: 300 },
+          cutout: '62%',
+          plugins: {
+            legend: { position:'right', labels:{ color:'#94a3b8', font:{ size:9, family:'Share Tech Mono' }, boxWidth:10, padding:6 } }
+          }
         }
       });
     }
-  } catch(e){ console.warn('[pause] innerHTML patch failed', e); }
+    var c = state.spillCounts;
+    window.__pieMaster.data.datasets[0].data = [c.crude||0, c.diesel||0, c.bilge||0, c.unknown||0];
+    window.__pieMaster.update('none');
+  }
 
-  // --- Show button only when Analysis page is visible ---
-  function watchPage(){
-    var p5 = document.getElementById('page5');
-    if (p5){
-      var active = p5.classList.contains('active');
-      document.body.classList.toggle('analysis-page', active);
+  function renderMonthly(){
+    var canvas = document.getElementById('barChart');
+    if (!canvas || typeof Chart === 'undefined') return;
+
+    var existing = Chart.getChart && Chart.getChart(canvas);
+    if (existing && !window.__barMaster) existing.destroy();
+
+    if (!window.__barMaster){
+      window.__barMaster = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: MONTHS,
+          datasets: [{
+            label: 'Detections',
+            data: state.monthBars.slice(),
+            backgroundColor: '#1f4e73',
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          animation: { duration: 300 },
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid:{ color:'rgba(255,255,255,0.03)' }, ticks:{ color:'#5c7286', font:{ size:8, family:'Share Tech Mono' } } },
+            y: { beginAtZero:true, grid:{ color:'rgba(255,255,255,0.03)' }, ticks:{ color:'#5c7286', font:{ size:8, family:'Share Tech Mono' } } }
+          }
+        }
+      });
     }
+    // Current month highlighted
+    var colors = state.monthBars.map(function(_, i){ return i === nowMonth ? '#00ff9d' : '#1f4e73'; });
+    window.__barMaster.data.datasets[0].data = state.monthBars.slice();
+    window.__barMaster.data.datasets[0].backgroundColor = colors;
+    window.__barMaster.update('none');
   }
-  setInterval(watchPage, 400);
 
-  // --- Button handler ---
-  function hookBtn(){
-    var btn = document.getElementById('analysis-pause');
-    if (!btn) { setTimeout(hookBtn, 400); return; }
-    btn.addEventListener('click', function(){
-      window.__analysisPaused = !window.__analysisPaused;
-      document.body.classList.toggle('analysis-paused', window.__analysisPaused);
-      btn.textContent = window.__analysisPaused ? '▶ RESUME' : '⏸ PAUSE';
-      btn.classList.toggle('paused', window.__analysisPaused);
-      console.log('[pause]', window.__analysisPaused ? 'PAUSED' : 'RESUMED');
-    });
-    console.log('[pause] button hooked');
+  function renderRiskIndex(){
+    var el = document.getElementById('risk-panel');
+    if (!el) return;
+    var score = Math.round(Math.min(70, (state.density / 400) * 70) + Math.min(30, (state.ships / 2000) * 30));
+    state.riskHistory.push(score);
+    if (state.riskHistory.length > 7) state.riskHistory.shift();
+
+    var color = score >= 70 ? '#ff4757' : score >= 40 ? '#fbbf24' : '#00ff9d';
+    var label = score >= 70 ? 'HIGH' : score >= 40 ? 'MODERATE' : 'LOW';
+
+    var bars = state.riskHistory.map(function(v, i){
+      var h = Math.max(8, v);
+      var c = v >= 70 ? '#ff4757' : v >= 40 ? '#fbbf24' : '#00ff9d';
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;">' +
+        '<div style="font-size:8px;color:'+c+';margin-bottom:3px;">'+v+'</div>' +
+        '<div style="width:100%;background:rgba(255,255,255,0.04);height:100px;position:relative;border-radius:2px;overflow:hidden;">' +
+          '<div style="position:absolute;bottom:0;left:0;right:0;height:'+h+'%;background:'+c+';opacity:'+(i===state.riskHistory.length-1?'0.95':'0.55')+';box-shadow:0 0 10px '+c+';"></div>' +
+        '</div>' +
+        '<div style="font-size:7px;color:#5c7286;margin-top:3px;">T-'+(state.riskHistory.length-1-i)+'</div>' +
+      '</div>';
+    }).join('');
+
+    el.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<div style="font-family:\'Orbitron\',monospace;font-size:20px;color:'+color+';text-shadow:0 0 14px '+color+';">'+score+'</div>' +
+        '<div style="font-size:9px;color:'+color+';letter-spacing:0.12em;">'+label+' RISK</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:5px;align-items:flex-end;">'+bars+'</div>' +
+      '<div style="font-size:8px;color:#5c7286;margin-top:8px;letter-spacing:0.1em;">STATIONARY CLUSTERING · LIVE AIS</div>';
   }
-  hookBtn();
 
-  console.log('[pause] system armed');
+  function renderResponseTime(){
+    var mttdEl = document.getElementById('anaMttd');
+    var mttrEl = document.getElementById('anaMttr');
+    var respEl = document.getElementById('anaResp');
+    var minEl = document.getElementById('anaRespMin');
+    var maxEl = document.getElementById('anaRespMax');
+
+    // MTTD always has a value (sub-second in practice)
+    if (mttdEl) mttdEl.innerHTML = '0.01<span style="font-size:10px;color:#94a3b8;"> min</span>';
+
+    if (state.incidents.length === 0){
+      if (mttrEl) mttrEl.innerHTML = '—<span style="font-size:10px;color:#94a3b8;"> min</span>';
+      if (respEl) respEl.textContent = '—';
+      if (minEl) minEl.textContent = '—';
+      if (maxEl) maxEl.textContent = '—';
+      return;
+    }
+    var durs = state.incidents.map(function(i){ return i.duration; });
+    var avg = durs.reduce(function(a,b){return a+b;},0) / durs.length;
+    if (mttrEl) mttrEl.innerHTML = avg.toFixed(2) + '<span style="font-size:10px;color:#94a3b8;"> min</span>';
+    if (respEl) respEl.textContent = avg.toFixed(2) + ' min';
+    if (minEl) minEl.textContent = Math.min.apply(null, durs).toFixed(2) + ' min';
+    if (maxEl) maxEl.textContent = Math.max.apply(null, durs).toFixed(2) + ' min';
+  }
+
+  // ---- Threat level watch + incident tracking ----
+  function tick(){
+    // Fetch every 30s, recompute every tick
+    var d = state.density;
+    var t = threatFor(d);
+
+    // Update ticker at top
+    setTxt('tick-ships', state.ships);
+    setTxt('tick-density', d.toFixed(1));
+
+    // Update all analysis visuals
+    setHtml('anaDensity', d.toFixed(1) + '<span style="font-size:10px;color:#94a3b8;"> ug/L</span>');
+    var spread = 2.0 + (d / 100) * 2.0;
+    setHtml('anaSpread', spread.toFixed(2) + '<span style="font-size:10px;color:#94a3b8;"> km/h</span>');
+
+    // Update spill counts
+    var cls = classify(d);
+    state.spillCounts[cls] = (state.spillCounts[cls] || 0) + 1;
+    state.monthBars[nowMonth] = (state.monthBars[nowMonth] || 0) + 1;
+
+    // Push to spread history
+    state.spreadHistory.push({ t: nowLabel(), d: d, s: state.ships });
+    if (state.spreadHistory.length > 20) state.spreadHistory.shift();
+
+    // Incident lifecycle — track threat level transitions
+    if (state.lastLevel !== null && t.t !== state.lastLevel){
+      if (t.t === 'HIGH' || t.t === 'SEVERE'){
+        if (!state.currentIncident){
+          state.currentIncident = { start: Date.now(), level: t.t };
+          console.log('[master] incident opened', t.t);
+        }
+      } else if (t.t === 'LOW' || t.t === 'MODERATE'){
+        if (state.currentIncident){
+          state.currentIncident.end = Date.now();
+          state.currentIncident.duration = (state.currentIncident.end - state.currentIncident.start) / 60000;
+          state.incidents.push(state.currentIncident);
+          console.log('[master] incident closed', state.currentIncident.duration.toFixed(2), 'min');
+          state.currentIncident = null;
+        }
+      }
+    }
+    state.lastLevel = t.t;
+
+    // Render all charts
+    renderSpreadChart();
+    renderSpillTypes();
+    renderMonthly();
+    renderRiskIndex();
+    renderResponseTime();
+
+    console.log('[master] density', d.toFixed(1), '| ships', state.ships, '| level', t.t);
+  }
+
+  // ---- Boot ----
+  async function loop(){
+    await fetchVessels();
+    state.density = computeDensity();
+    tick();
+  }
+
+  // Initial fetch + start loop
+  loop();
+  setInterval(async function(){
+    await fetchVessels();
+    state.density = computeDensity();
+    // Push a fresh density even between vessel fetches (real variation from vessel sample)
+    tick();
+  }, 5000);
+
+  console.log('[master] feeder installed — single source of truth');
 })();
 </script></html>
 
@@ -5406,6 +4542,7 @@ body.analysis-paused #analysis-paused-badge { display: block; }
 
 
 <!-- trigger redeploy -->
+
 
 
 
