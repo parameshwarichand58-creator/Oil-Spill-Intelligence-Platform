@@ -3650,29 +3650,33 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   // Find a value element by its label text
   function findByLabel(label){
+    var want = label.toLowerCase();
     var all = document.querySelectorAll('div, span, p, td');
     for (var i = 0; i < all.length; i++){
       var el = all[i];
       if (el.children.length > 0) continue;
       var t = (el.textContent || '').trim().toLowerCase();
-      if (t === label.toLowerCase()){
-        // Look for sibling or parent's next element that contains a value
-        var parent = el.parentElement;
+      if (t !== want) continue;
+
+      // Found the label. Search in the parent AND grandparent for a value element
+      var containers = [el.parentElement];
+      if (el.parentElement && el.parentElement.parentElement){
+        containers.push(el.parentElement.parentElement);
+      }
+      for (var k = 0; k < containers.length; k++){
+        var parent = containers[k];
         if (!parent) continue;
-        // Check parent's children for a value element
-        for (var j = 0; j < parent.children.length; j++){
-          var c = parent.children[j];
+        var kids = parent.querySelectorAll('*');
+        for (var j = 0; j < kids.length; j++){
+          var c = kids[j];
           if (c === el) continue;
-          if (c.children.length === 0){
-            var ct = (c.textContent || '').trim();
-            if (ct === '--' || /^\d/.test(ct) || ct === '…'){
-              return c;
-            }
-          }
+          if (c.children.length > 0) continue;
+          var ct = (c.textContent || '').trim();
+          // Value: --, …, a number, or %/number combo. Skip ":" and label text
+          if (ct === '--' || ct === '…' || ct === '---') return c;
+          if (/^\d/.test(ct)) return c;
+          if (/^[\d.]+\s*(%|µg|km|km\/h)/.test(ct)) return c;
         }
-        // Check next sibling
-        var sib = el.nextElementSibling;
-        if (sib && sib.children.length === 0) return sib;
       }
     }
     return null;
@@ -3792,6 +3796,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
 
 <!-- trigger redeploy -->
+
 
 
 
