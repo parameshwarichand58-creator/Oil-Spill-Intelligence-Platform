@@ -2577,12 +2577,38 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[extra-live] armed');
 })();
+</script><script id="pie-colors-fix">
+// Force 4 distinct colors on the Spill Types doughnut
+(function(){
+  function apply(){
+    var canvas = document.getElementById('pieChart');
+    if (!canvas || typeof Chart === 'undefined'){ setTimeout(apply, 400); return; }
+    var chart = Chart.getChart && Chart.getChart(canvas);
+    if (!chart) { setTimeout(apply, 400); return; }
+
+    var colors = ['#ff2e63', '#ffb020', '#00d4ff', '#7c3aed'];
+
+    if (!chart.data.datasets[0].backgroundColor ||
+        chart.data.datasets[0].backgroundColor.join('') !== colors.join('')){
+      chart.data.datasets[0].backgroundColor = colors;
+      chart.data.datasets[0].borderColor = '#050a12';
+      chart.data.datasets[0].borderWidth = 3;
+      chart.data.datasets[0].hoverOffset = 8;
+      chart.update('none');
+      console.log('[pie] 4 colors applied:', colors.join(', '));
+    }
+  }
+  setInterval(apply, 2000);
+  apply();
+  console.log('[pie] color fix armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
