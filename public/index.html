@@ -3060,12 +3060,71 @@ input:focus,select:focus,textarea:focus{
   setTimeout(poll, 800);
   setInterval(poll, 15000);
 })();
+</script><script>
+// Threat level v3 — targets the exact IDs
+(function(){
+  var RELAY = 'https://oil-spill-intelligence-platform.onrender.com';
+  var lastDensity = null;
+
+  function threatFor(d){
+    if (d >= 400) return { txt:'SEVERE',   color:'#ff4757', bar:95, reason:'SEVERE \u00B7 full response, continuous SAR tasking' };
+    if (d >= 150) return { txt:'HIGH',     color:'#ff4757', bar:70, reason:'HIGH \u00B7 open incident, notify coast guard' };
+    if (d >= 50)  return { txt:'MODERATE', color:'#fbbf24', bar:45, reason:'MODERATE \u00B7 escalate per threshold table' };
+    return          { txt:'LOW',      color:'#00ff88', bar:20, reason:'No active threats \u00B7 All systems nominal' };
+  }
+
+  function applyThreat(d){
+    var t = threatFor(d);
+    var textEl = document.getElementById('threatLevelText');
+    var barEl  = document.getElementById('threatBar');
+    var reasonEl = document.getElementById('threatReason');
+
+    if (textEl){
+      textEl.textContent = t.txt;
+      textEl.style.color = t.color;
+      textEl.style.textShadow = '0 0 20px ' + t.color;
+    }
+    if (barEl){
+      barEl.style.width = t.bar + '%';
+    }
+    if (reasonEl){
+      reasonEl.textContent = t.reason;
+    }
+
+    console.log('[threat] ' + t.txt + ' for density ' + d.toFixed(1) + ' ug/L');
+  }
+
+  async function poll(){
+    try {
+      var r = await fetch(RELAY + '/health');
+      var data = await r.json();
+      var d = typeof data.density === 'number' ? data.density : 0;
+      if (d !== lastDensity){
+        lastDensity = d;
+        applyThreat(d);
+      }
+    } catch(e) { console.warn('[threat]', e.message); }
+  }
+
+  // Retry every 500ms for 30s until the element appears
+  var tries = 0;
+  var fast = setInterval(function(){
+    tries++;
+    if (document.getElementById('threatLevelText') || tries > 60){
+      clearInterval(fast);
+      poll();
+    }
+  }, 500);
+
+  setInterval(poll, 15000);
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
