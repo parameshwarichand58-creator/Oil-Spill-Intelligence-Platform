@@ -2434,12 +2434,187 @@ if (typeof toggleLiveSatellite === 'undefined') {
   setInterval(pollWeather, 600000);
   setInterval(pollCerulean, 60000);
 })();
+</script><style id="mission-control-ui">
+:root{
+  --mc-accent:#4a9eff; --mc-cyan:#00d4aa; --mc-amber:#f59e0b; --mc-red:#ff4757;
+}
+body{
+  background:
+    radial-gradient(ellipse at 20% 10%, rgba(74,158,255,0.06), transparent 50%),
+    radial-gradient(ellipse at 80% 90%, rgba(0,212,170,0.05), transparent 50%),
+    #060d18 !important;
+  padding-top:26px !important;
+}
+body::before{
+  content:''; position:fixed; inset:0;
+  background-image:
+    linear-gradient(rgba(74,158,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74,158,255,0.03) 1px, transparent 1px);
+  background-size:40px 40px; pointer-events:none; z-index:0;
+}
+body::after{
+  content:''; position:fixed; inset:0;
+  background:repeating-linear-gradient(0deg, rgba(74,158,255,0.015) 0px, rgba(74,158,255,0.015) 1px, transparent 1px, transparent 3px);
+  pointer-events:none; z-index:0; animation:mc-scan 8s linear infinite;
+}
+@keyframes mc-scan{0%{background-position:0 0}100%{background-position:0 24px}}
+#sidebar{ top:26px !important; }
+.card{
+  background:linear-gradient(135deg, rgba(15,25,40,0.75), rgba(10,18,30,0.6)) !important;
+  border:1px solid rgba(74,158,255,0.15) !important;
+  backdrop-filter:blur(8px);
+  box-shadow:0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04) !important;
+  position:relative; overflow:hidden;
+  transition:transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.card:hover{
+  transform:translateY(-2px);
+  border-color:rgba(74,158,255,0.35) !important;
+  box-shadow:0 8px 32px rgba(0,0,0,0.5), 0 0 24px rgba(74,158,255,0.08), inset 0 1px 0 rgba(255,255,255,0.06) !important;
+}
+.card::before{
+  content:''; position:absolute; top:0; left:0; width:14px; height:14px;
+  border-top:2px solid var(--mc-accent); border-left:2px solid var(--mc-accent);
+  opacity:0.4; transition:opacity 0.25s;
+}
+.card::after{
+  content:''; position:absolute; bottom:0; right:0; width:14px; height:14px;
+  border-bottom:2px solid var(--mc-accent); border-right:2px solid var(--mc-accent);
+  opacity:0.4; transition:opacity 0.25s;
+}
+.card:hover::before, .card:hover::after{ opacity:1; }
+.card-title{
+  font-family:'Orbitron',monospace !important;
+  letter-spacing:0.08em; text-transform:uppercase; font-size:11px !important;
+  color:#94a3b8 !important;
+  border-bottom:1px solid rgba(74,158,255,0.08);
+  padding-bottom:8px; margin-bottom:12px;
+}
+.card-title::before{
+  content:''; display:inline-block; width:3px; height:12px;
+  background:linear-gradient(180deg, var(--mc-accent), var(--mc-cyan));
+  margin-right:8px; vertical-align:middle; border-radius:2px;
+  box-shadow:0 0 8px rgba(74,158,255,0.6);
+}
+.stat-number{ text-shadow:0 0 20px currentColor; font-variant-numeric:tabular-nums; }
+.nav-item{ transition:background 0.2s, padding-left 0.2s; }
+.nav-item:hover{ background:rgba(74,158,255,0.06) !important; }
+.nav-item.active{ box-shadow:inset 3px 0 0 var(--mc-accent); }
+#sidebar{
+  background:linear-gradient(180deg, rgba(10,18,30,0.95), rgba(6,13,24,0.98)) !important;
+  border-right:1px solid rgba(74,158,255,0.12) !important;
+  backdrop-filter:blur(10px);
+}
+.btn{ transition:all 0.2s ease; position:relative; overflow:hidden; }
+.btn::after{
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%);
+  transform:translateX(-100%); transition:transform 0.6s;
+}
+.btn:hover::after{ transform:translateX(100%); }
+.btn-success{ box-shadow:0 0 16px rgba(0,212,170,0.25) !important; }
+.btn-primary{ box-shadow:0 0 16px rgba(74,158,255,0.25) !important; }
+table{ border-collapse:separate !important; border-spacing:0 2px; }
+table thead th{ background:rgba(74,158,255,0.05); padding:8px 10px !important; }
+table tbody tr{ transition:background 0.15s; }
+table tbody tr:hover{ background:rgba(74,158,255,0.04); }
+input[type="text"], input[type="file"], select, textarea{
+  background:rgba(10,18,30,0.6) !important;
+  border:1px solid rgba(74,158,255,0.2) !important;
+  transition:border-color 0.2s, box-shadow 0.2s;
+}
+input[type="text"]:focus, select:focus, textarea:focus{
+  border-color:var(--mc-accent) !important;
+  box-shadow:0 0 0 3px rgba(74,158,255,0.15) !important;
+  outline:none;
+}
+::-webkit-scrollbar{ width:8px; height:8px; }
+::-webkit-scrollbar-track{ background:rgba(10,18,30,0.5); }
+::-webkit-scrollbar-thumb{
+  background:linear-gradient(180deg, var(--mc-accent), var(--mc-cyan));
+  border-radius:4px;
+}
+h1, h2, .highlight{ text-shadow:0 0 24px rgba(74,158,255,0.3); }
+#mc-ticker{
+  position:fixed; top:0; left:0; right:0; height:26px;
+  background:linear-gradient(90deg, rgba(74,158,255,0.12), rgba(0,212,170,0.12), rgba(74,158,255,0.12));
+  border-bottom:1px solid rgba(74,158,255,0.2);
+  z-index:99999; overflow:hidden;
+  font-family:'Share Tech Mono',monospace; font-size:11px; color:#c9d8ea;
+  display:flex; align-items:center; backdrop-filter:blur(8px);
+}
+#mc-ticker .tick-inner{
+  display:flex; gap:48px; white-space:nowrap;
+  animation:mc-tick 60s linear infinite; padding-left:100%;
+}
+@keyframes mc-tick{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}
+#mc-ticker .tick-item{ color:#94a3b8; }
+#mc-ticker .tick-item b{ color:#fff; }
+#mc-ticker .tick-item.live b{ color:#00d4aa; }
+#mc-ticker *{ pointer-events:none; }
+</style>
+
+<div id="mc-ticker">
+  <div class="tick-inner">
+    <span class="tick-item live">● LIVE · <b id="tick-ships">--</b> vessels tracked in Bay of Bengal</span>
+    <span class="tick-item">OIL DENSITY <b id="tick-density">--</b> µg/L</span>
+    <span class="tick-item">WIND <b id="tick-wind">--</b> km/h · HUMIDITY <b id="tick-hum">--</b>%</span>
+    <span class="tick-item">WAVE HEIGHT <b id="tick-wave">--</b> m · SST <b id="tick-sst">--</b> °C</span>
+    <span class="tick-item">CERULEAN SLICKS <b id="tick-ceru">--</b></span>
+    <span class="tick-item">MISSION TIME T+ <b id="tick-time">00:00:00</b></span>
+  </div>
+</div>
+
+<script>
+(function(){
+  var RELAY='https://oil-spill-intelligence-platform.onrender.com';
+  var start=Date.now();
+  function set(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
+  function pad(n){return String(n).padStart(2,'0');}
+  async function tick(){
+    try{var r=await fetch(RELAY+'/health');var d=await r.json();
+      set('tick-ships',d.vessels||'--');
+      set('tick-density',(d.density||0).toFixed(1));
+    }catch(e){}
+  }
+  async function weather(){
+    try{var r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=13.0827&longitude=80.2707&current=temperature_2m,relative_humidity_2m,wind_speed_10m');
+      var d=await r.json();
+      set('tick-wind',Math.round(d.current.wind_speed_10m));
+      set('tick-hum',Math.round(d.current.relative_humidity_2m));
+    }catch(e){}
+  }
+  async function marine(){
+    try{var r=await fetch('https://marine-api.open-meteo.com/v1/marine?latitude=13.0827&longitude=80.2707&current=wave_height,sea_surface_temperature');
+      var d=await r.json();
+      if(d.current){
+        set('tick-wave',(d.current.wave_height||0).toFixed(1));
+        set('tick-sst',(d.current.sea_surface_temperature||0).toFixed(1));
+      }
+    }catch(e){}
+  }
+  async function ceru(){
+    try{var r=await fetch(RELAY+'/api/cerulean');var d=await r.json();
+      set('tick-ceru',(d.features||[]).length);
+    }catch(e){}
+  }
+  setInterval(function(){
+    var e=Math.floor((Date.now()-start)/1000);
+    set('tick-time',pad(Math.floor(e/3600))+':'+pad(Math.floor(e/60)%60)+':'+pad(e%60));
+  },1000);
+  tick(); weather(); marine(); ceru();
+  setInterval(tick,30000);
+  setInterval(weather,600000);
+  setInterval(marine,600000);
+  setInterval(ceru,120000);
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
