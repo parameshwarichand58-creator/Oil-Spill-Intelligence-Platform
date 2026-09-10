@@ -3118,12 +3118,89 @@ input:focus,select:focus,textarea:focus{
 
   setInterval(poll, 15000);
 })();
+</script><script>
+// Threat level v4 — MutationObserver wins any race
+(function(){
+  var RELAY = 'https://oil-spill-intelligence-platform.onrender.com';
+  var currentDensity = 0;
+  var currentLevel = 'LOW';
+
+  function threatFor(d){
+    if (d >= 400) return { txt:'SEVERE',   color:'#ff4757', bar:95, reason:'SEVERE \u00B7 full response, continuous SAR tasking' };
+    if (d >= 150) return { txt:'HIGH',     color:'#ff4757', bar:70, reason:'HIGH \u00B7 open incident, notify coast guard' };
+    if (d >= 50)  return { txt:'MODERATE', color:'#fbbf24', bar:45, reason:'MODERATE \u00B7 escalate per threshold table' };
+    return          { txt:'LOW',      color:'#00ff88', bar:20, reason:'No active threats \u00B7 All systems nominal' };
+  }
+
+  function enforce(){
+    var t = threatFor(currentDensity);
+    currentLevel = t.txt;
+
+    var textEl = document.getElementById('threatLevelText');
+    var barEl  = document.getElementById('threatBar');
+    var reasonEl = document.getElementById('threatReason');
+
+    if (textEl && textEl.textContent !== t.txt){
+      textEl.textContent = t.txt;
+      textEl.style.color = t.color;
+      textEl.style.textShadow = '0 0 20px ' + t.color;
+    } else if (textEl && textEl.style.color !== t.color){
+      textEl.style.color = t.color;
+    }
+    if (barEl && barEl.style.width !== t.bar + '%'){
+      barEl.style.width = t.bar + '%';
+    }
+    if (reasonEl && reasonEl.textContent !== t.reason){
+      reasonEl.textContent = t.reason;
+    }
+  }
+
+  // Watch for any change to the threat elements and re-enforce
+  var observer = new MutationObserver(function(){
+    var t = threatFor(currentDensity);
+    var textEl = document.getElementById('threatLevelText');
+    if (textEl && textEl.textContent !== t.txt){
+      enforce();
+    }
+  });
+
+  // Attach observer once element exists
+  var attachTries = 0;
+  var attachTimer = setInterval(function(){
+    attachTries++;
+    var textEl = document.getElementById('threatLevelText');
+    if (textEl){
+      observer.observe(document.body, { subtree:true, childList:true, characterData:true, attributes:true, attributeFilter:['style'] });
+      clearInterval(attachTimer);
+      console.log('[threat] observer attached');
+      enforce();
+    }
+    if (attachTries > 120) clearInterval(attachTimer); // give up after 60s
+  }, 500);
+
+  async function poll(){
+    try {
+      var r = await fetch(RELAY + '/health');
+      var data = await r.json();
+      var d = typeof data.density === 'number' ? data.density : 0;
+      if (d !== currentDensity){
+        currentDensity = d;
+        enforce();
+        console.log('[threat] MODERATE for density ' + d.toFixed(1) + ' ug/L');
+      }
+    } catch(e) { console.warn('[threat]', e.message); }
+  }
+
+  poll();
+  setInterval(poll, 15000);
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
