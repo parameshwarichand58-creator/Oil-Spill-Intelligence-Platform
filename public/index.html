@@ -4563,12 +4563,37 @@ pre, code {
 }
 /* If there's a sidebar offset, respect it */
 body { padding-right: 0 !important; }
+</style><style id="earth-center-fix">
+/* Center the Earth canvas inside its hero card */
+#top-hero {
+  align-items: stretch !important;
+}
+#top-hero > div:first-child {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 12px 8px !important;
+}
+#top-hero > div:first-child > canvas,
+#earthCanvas {
+  display: block !important;
+  margin: 0 auto !important;
+  max-width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1;
+}
+#top-hero > div:first-child > div {
+  text-align: center !important;
+  margin-top: 6px !important;
+}
 </style></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
