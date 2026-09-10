@@ -5407,12 +5407,194 @@ body { padding-right: 0 !important; }
 
   console.log('[vessels] armed');
 })();
+</script><script id="map-scenario-wire">
+// Wire Map page scenario buttons + Trigger Alert + Go to Alert
+(function(){
+  if (window.__mapScenariosWired) return;
+  window.__mapScenariosWired = true;
+
+  var selectedScenario = null;
+  var SCENARIOS = {
+    'Natural Seepage':  { id:'natural', color:'#00d4ff', risk:'LOW',      msg:'Natural seepage detected — monitoring' },
+    'Culprit Theft':    { id:'theft',   color:'#fbbf24', risk:'MODERATE', msg:'Suspected illegal transfer — investigate' },
+    'Internal Failure': { id:'failure', color:'#fbbf24', risk:'MODERATE', msg:'Internal system failure — vessel disabled' },
+    'Collision Accident':{id:'collision',color:'#ff4757', risk:'HIGH',    msg:'Collision detected — immediate response' },
+    'Fire Explosion':   { id:'fire',    color:'#ff4757', risk:'SEVERE',   msg:'Fire / explosion — full emergency' },
+    'Weather Storm':    { id:'storm',   color:'#a855f7', risk:'MODERATE', msg:'Storm cell approaching — vessels at risk' }
+  };
+
+  function toast(msg, color){
+    var el = document.createElement('div');
+    el.style.cssText = 'position:fixed;top:44px;right:24px;z-index:999999;' +
+      'background:rgba(8,14,22,0.95);border:1px solid ' + color + ';' +
+      'border-left:3px solid ' + color + ';border-radius:4px;' +
+      'padding:12px 18px;font-family:\'Share Tech Mono\',monospace;font-size:12px;' +
+      'color:#c9d8ea;box-shadow:0 8px 32px rgba(0,0,0,0.5);backdrop-filter:blur(12px);' +
+      'opacity:0;transform:translateX(20px);transition:opacity 0.3s,transform 0.3s;' +
+      'pointer-events:none;max-width:340px;line-height:1.5;';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(function(){ el.style.opacity='1'; el.style.transform='translateX(0)'; }, 30);
+    setTimeout(function(){
+      el.style.opacity='0'; el.style.transform='translateX(20px)';
+      setTimeout(function(){ el.remove(); }, 400);
+    }, 3200);
+  }
+
+  function logMission(msg){
+    var log = document.getElementById('missionLog');
+    if (!log) return;
+    var t = new Date().toTimeString().slice(0,8);
+    var div = document.createElement('div');
+    div.innerHTML = '<span style="color:#5c7286;margin-right:8px;">' + t + '</span>' + msg;
+    log.prepend(div);
+  }
+
+  function selectScenario(name){
+    var sc = SCENARIOS[name];
+    if (!sc) return;
+
+    selectedScenario = name;
+
+    // Highlight the clicked button
+    document.querySelectorAll('#page2 button, #page2 .scenario-btn, [onclick*="scenario"], [onclick*="Natural"], [onclick*="Culprit"], [onclick*="Collision"], [onclick*="Fire"], [onclick*="Weather"]').forEach(function(b){
+      var txt = (b.textContent || '').trim();
+      if (txt.indexOf(name.split(' ')[0]) >= 0 || txt.indexOf(name) >= 0){
+        b.style.borderColor = sc.color;
+        b.style.boxShadow = '0 0 16px ' + sc.color;
+      } else {
+        b.style.borderColor = '';
+        b.style.boxShadow = '';
+      }
+    });
+
+    toast('◉ Scenario selected: ' + name + ' · ' + sc.risk + ' risk', sc.color);
+    console.log('[map] scenario selected:', sc.id, sc.risk);
+  }
+
+  function triggerAlert(){
+    if (!selectedScenario){
+      toast('⚠ Select a scenario first', '#fbbf24');
+      return;
+    }
+    var sc = SCENARIOS[selectedScenario];
+
+    // Update threat level display
+    var big = document.getElementById('tLevelBig');
+    if (big){ big.textContent = sc.risk; big.style.color = sc.color; }
+    var tl = document.getElementById('threatLevelText');
+    if (tl){ tl.textContent = sc.risk; tl.style.color = sc.color; tl.style.textShadow = '0 0 20px ' + sc.color; }
+    var tl2 = document.getElementById('tLevel');
+    if (tl2){ tl2.textContent = sc.risk; }
+
+    // Update threat bar
+    var bar = document.getElementById('threatBar');
+    if (bar) bar.style.width = (sc.risk === 'SEVERE' ? 95 : sc.risk === 'HIGH' ? 70 : sc.risk === 'MODERATE' ? 45 : 20) + '%';
+
+    // Increment alerts counter
+    ['statAlerts','cAlerts','alertCount'].forEach(function(id){
+      var el = document.getElementById(id);
+      if (el){
+        var cur = parseInt(el.textContent) || 0;
+        el.textContent = cur + 1;
+      }
+    });
+
+    // Log to mission
+    logMission('🚨 ALERT TRIGGERED · ' + selectedScenario + ' · ' + sc.risk + ' risk');
+    logMission('📡 ' + sc.msg);
+
+    // Toast
+    toast('🚨 Alert triggered · ' + selectedScenario, sc.color);
+
+    // Update the popup alert box if visible
+    var popupTitle = document.getElementById('alertTitle');
+    if (popupTitle) popupTitle.textContent = 'ALERT · ' + selectedScenario;
+    var popupSub = document.getElementById('alertSub');
+    if (popupSub) popupSub.textContent = sc.msg;
+    var popupDetails = document.getElementById('alertDetails');
+    if (popupDetails) popupDetails.textContent = 'Risk: ' + sc.risk + ' · Trigger: ' + selectedScenario;
+
+    console.log('[map] alert triggered:', sc.id);
+  }
+
+  function goToAlert(){
+    // Navigate to Alert page (page4)
+    if (typeof window.showPage === 'function'){
+      window.showPage('page4');
+    } else {
+      var p = document.getElementById('page4');
+      if (p){
+        document.querySelectorAll('.page').forEach(function(x){ x.classList.remove('active'); });
+        p.classList.add('active');
+      }
+    }
+    // Highlight Alert nav item
+    document.querySelectorAll('.nav-item').forEach(function(n){
+      n.classList.remove('active');
+      if (/alert/i.test(n.textContent)) n.classList.add('active');
+    });
+    toast('Opening Alert console...', '#00d4ff');
+    console.log('[map] navigated to Alert page');
+  }
+
+  function wire(){
+    var found = 0;
+    document.querySelectorAll('button, .btn, [role="button"], div[onclick]').forEach(function(b){
+      if (b.dataset.mapWired) return;
+      var txt = (b.textContent || '').trim();
+      var oc = b.getAttribute('onclick') || '';
+
+      // Scenario buttons
+      Object.keys(SCENARIOS).forEach(function(name){
+        if (txt.indexOf(name.split(' ')[0]) === 0 || txt === name || (txt.indexOf(name) >= 0)){
+          b.dataset.mapWired = '1';
+          found++;
+          b.addEventListener('click', function(e){
+            e.preventDefault();
+            e.stopPropagation();
+            selectScenario(name);
+          }, true);
+        }
+      });
+
+      // Trigger Alert button
+      if (/trigger alert/i.test(txt)){
+        b.dataset.mapWired = '1';
+        found++;
+        b.addEventListener('click', function(e){
+          e.preventDefault();
+          e.stopPropagation();
+          triggerAlert();
+        }, true);
+      }
+
+      // Go to Alert button
+      if (/go to alert/i.test(txt)){
+        b.dataset.mapWired = '1';
+        found++;
+        b.addEventListener('click', function(e){
+          e.preventDefault();
+          e.stopPropagation();
+          goToAlert();
+        }, true);
+      }
+    });
+
+    if (found > 0) console.log('[map] wired', found, 'buttons');
+  }
+
+  wire();
+  setInterval(wire, 2000);
+  console.log('[map] scenario wiring armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
