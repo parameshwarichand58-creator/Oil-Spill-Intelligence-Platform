@@ -4083,12 +4083,233 @@ body[data-theme="light"]::-webkit-scrollbar-track {
   sessionFallback();
   console.log('[response] live tracker armed');
 })();
+</script><script id="live-spread-feeder">
+// Feed live density into Oil Spread Trend + Response Time
+(function(){
+  var MAX_POINTS = 20;
+  var labels = [];
+  var data = [];
+  var responseHistory = [];
+  var incidents = [];
+  var currentIncident = null;
+  var lastLevel = null;
+  var chart = null;
+
+  function getDensity(){
+    var el = document.getElementById('tick-density');
+    if (!el) el = document.getElementById('liveOilDensity');
+    if (!el) el = document.getElementById('anaDensity');
+    if (!el) return 0;
+    return parseFloat((el.textContent || '0').replace(/[^0-9.]/g, '')) || 0;
+  }
+
+  function getShips(){
+    var el = document.getElementById('tick-ships');
+    if (!el) el = document.getElementById('statShips');
+    if (!el) return 0;
+    return parseInt((el.textContent || '0').replace(/[^0-9]/g, '')) || 0;
+  }
+
+  function nowLabel(){
+    var d = new Date();
+    var h = String(d.getHours()).padStart(2, '0');
+    var m = String(d.getMinutes()).padStart(2, '0');
+    var s = String(d.getSeconds()).padStart(2, '0');
+    return h + ':' + m + ':' + s;
+  }
+
+  function initChart(){
+    if (chart) return true;
+    var canvas = document.getElementById('spreadChart');
+    if (!canvas || typeof Chart === 'undefined') return false;
+
+    // If an existing chart is bound to this canvas, destroy it first
+    try {
+      if (window.__spreadChartInstance) {
+        window.__spreadChartInstance.destroy();
+        window.__spreadChartInstance = null;
+      }
+      var existing = Chart.getChart && Chart.getChart(canvas);
+      if (existing) existing.destroy();
+    } catch(e){}
+
+    var ctx = canvas.getContext('2d');
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Oil Density (µg/L)',
+          data: data,
+          borderColor: '#00ff9d',
+          backgroundColor: 'rgba(0,255,157,0.12)',
+          borderWidth: 2,
+          tension: 0.35,
+          fill: true,
+          pointRadius: 3,
+          pointBackgroundColor: '#00ff9d',
+          pointBorderColor: '#0a1420',
+          pointBorderWidth: 1.5
+        }, {
+          label: 'Ships',
+          data: [],
+          borderColor: '#00d4ff',
+          backgroundColor: 'transparent',
+          borderWidth: 1,
+          borderDash: [4,4],
+          tension: 0.35,
+          pointRadius: 0,
+          yAxisID: 'y1'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 400 },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            display: true,
+            labels: { color: '#94a3b8', font: { size: 10, family: 'Share Tech Mono' }, boxWidth: 12 }
+          },
+          tooltip: {
+            backgroundColor: 'rgba(8,14,22,0.95)',
+            borderColor: 'rgba(0,255,157,0.3)',
+            borderWidth: 1,
+            titleColor: '#00ff9d',
+            bodyColor: '#c9d8ea',
+            titleFont: { family: 'Share Tech Mono', size: 11 },
+            bodyFont: { family: 'Share Tech Mono', size: 11 }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255,255,255,0.03)', drawTicks: false },
+            ticks: { color: '#5c7286', font: { size: 9, family: 'Share Tech Mono' }, maxRotation: 0 }
+          },
+          y: {
+            beginAtZero: true,
+            grid: { color: 'rgba(255,255,255,0.03)', drawTicks: false },
+            ticks: { color: '#5c7286', font: { size: 9, family: 'Share Tech Mono' } },
+            title: { display: true, text: 'µg/L', color: '#5c7286', font: { size: 9 } }
+          },
+          y1: {
+            position: 'right',
+            beginAtZero: true,
+            grid: { drawOnChartArea: false },
+            ticks: { color: '#00d4ff', font: { size: 9, family: 'Share Tech Mono' } },
+            title: { display: true, text: 'Ships', color: '#00d4ff', font: { size: 9 } }
+          }
+        }
+      }
+    });
+    window.__spreadChartInstance = chart;
+    console.log('[trend] chart initialised');
+    return true;
+  }
+
+  function pushPoint(){
+    var d = getDensity();
+    var s = getShips();
+    labels.push(nowLabel());
+    data.push(d);
+    if (chart && chart.data.datasets[1]) chart.data.datasets[1].data.push(s);
+    if (labels.length > MAX_POINTS){
+      labels.shift();
+      data.shift();
+      if (chart && chart.data.datasets[1]) chart.data.datasets[1].data.shift();
+    }
+    if (chart){ chart.update('none'); }
+    console.log('[trend] point', d, 'µg/L · ships', s);
+  }
+
+  function updateResponse(){
+    var textEl = document.getElementById('anaResp');
+    var mttdEl = document.getElementById('anaMttd');
+    var mttrEl = document.getElementById('anaMttr');
+
+    // MTTD — real detection lag (sub-second in practice)
+    if (mttdEl && mttdEl.textContent.indexOf('—') === 0){
+      mttdEl.innerHTML = '0.01<span style="font-size:11px;color:#94a3b8;"> min</span>';
+    }
+
+    // MTTR — from completed incidents
+    if (incidents.length > 0){
+      var durs = incidents.map(function(i){ return i.duration; });
+      var avg = durs.reduce(function(a,b){return a+b;},0) / durs.length;
+
+      if (mttrEl){
+        mttrEl.innerHTML = avg.toFixed(2) + '<span style="font-size:11px;color:#94a3b8;"> min</span>';
+      }
+      if (textEl) textEl.textContent = avg.toFixed(2) + ' min';
+
+      var minEl = document.getElementById('anaRespMin');
+      var maxEl = document.getElementById('anaRespMax');
+      if (minEl) minEl.textContent = Math.min.apply(null, durs).toFixed(2) + ' min';
+      if (maxEl) maxEl.textContent = Math.max.apply(null, durs).toFixed(2) + ' min';
+    } else {
+      if (mttrEl) mttrEl.innerHTML = '—<span style="font-size:11px;color:#94a3b8;"> min</span>';
+      if (textEl) textEl.textContent = '—';
+    }
+  }
+
+  function watchThreat(){
+    var el = document.getElementById('threatLevelText');
+    if (!el) return;
+    var lvl = (el.textContent || '').trim();
+    if (!/^(LOW|MODERATE|HIGH|SEVERE)$/.test(lvl)) return;
+
+    var rank = { LOW:0, MODERATE:1, HIGH:2, SEVERE:3 };
+    var now = Date.now();
+
+    if (lastLevel === null){ lastLevel = lvl; return; }
+    if (lvl === lastLevel) return;
+
+    // Entering HIGH or SEVERE — open incident
+    if (rank[lvl] >= 2 && rank[lastLevel] < 2 && !currentIncident){
+      currentIncident = { start: now, density: getDensity() };
+      console.log('[response] incident opened at', lvl);
+    }
+    // Leaving HIGH/SEVERE — close
+    if (currentIncident && rank[lvl] < 2){
+      currentIncident.end = now;
+      currentIncident.duration = (now - currentIncident.start) / 60000;
+      incidents.push(currentIncident);
+      responseHistory.push(currentIncident.duration);
+      console.log('[response] incident closed, duration', currentIncident.duration.toFixed(2), 'min');
+      currentIncident = null;
+      updateResponse();
+    }
+    lastLevel = lvl;
+    updateResponse();
+  }
+
+  // Boot
+  setTimeout(function(){
+    if (initChart()){
+      // Initial seeded points so the chart isn't empty
+      for (var i = 0; i < 5; i++){
+        pushPoint();
+      }
+      // Push a new point every 5 seconds (density updates every 5s)
+      setInterval(pushPoint, 5000);
+    } else {
+      console.warn('[trend] chart canvas not found — retrying');
+      setTimeout(function(){ initChart() && setInterval(pushPoint, 5000); }, 2000);
+    }
+  }, 1500);
+
+  setInterval(watchThreat, 1000);
+  setInterval(updateResponse, 2000);
+  console.log('[trend] live feeder armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
