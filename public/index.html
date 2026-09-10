@@ -2453,12 +2453,137 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[analysis] live feeder armed');
 })();
+</script><style id="analysis-compact2">
+/* Compact the Analysis page */
+#page5 { padding: 12px 16px 16px !important; }
+#page5 .page-header { margin-bottom: 10px !important; padding-bottom: 8px !important; }
+#page5 .page-header h2 { font-size: 16px !important; margin-bottom: 2px !important; }
+#page5 .page-header p { font-size: 10px !important; margin-bottom: 0 !important; }
+#page5 .card { padding: 8px 10px !important; }
+#page5 .card-title { font-size: 9px !important; margin-bottom: 6px !important; padding-bottom: 5px !important; }
+#page5 .grid-2 { gap: 8px !important; margin-bottom: 8px !important; }
+#page5 > div > div[style*="grid-template-columns:repeat(4,1fr)"] { gap: 6px !important; margin-bottom: 8px !important; }
+#page5 > div > div[style*="grid-template-columns:repeat(4,1fr)"] .card { padding: 8px 10px !important; }
+#page5 > div > div[style*="grid-template-columns:repeat(4,1fr)"] .card div[style*="font-size:20px"] { font-size: 15px !important; margin-top: 4px !important; }
+#page5 > div > div[style*="grid-template-columns:repeat(4,1fr)"] .card div[style*="font-size:10px"] { font-size: 8px !important; }
+#page5 > div > div[style*="grid-template-columns:repeat(4,1fr)"] .card div[style*="font-size:9px"] { font-size: 8px !important; margin-top: 2px !important; }
+#page5 canvas { max-height: 130px !important; }
+#page5 table { font-size: 10px !important; }
+#page5 table th, #page5 table td { padding: 3px 5px !important; }
+#page5 .kpi { font-size: 18px !important; }
+
+/* Live metrics strip — new */
+#live-metrics-strip {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+#live-metrics-strip .lm-tile {
+  background: rgba(8,14,22,0.7);
+  border: 1px solid rgba(0,255,157,0.14);
+  border-left: 2px solid #00ff9d;
+  border-radius: 3px;
+  padding: 6px 8px;
+}
+#live-metrics-strip .lm-lbl {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: #5c7286;
+  text-transform: uppercase;
+}
+#live-metrics-strip .lm-val {
+  font-family: 'Orbitron', monospace;
+  font-size: 14px;
+  color: #fff;
+  margin-top: 3px;
+}
+#live-metrics-strip .lm-val.acc { color: #00ff9d; }
+#live-metrics-strip .lm-val.warn { color: #fbbf24; }
+#live-metrics-strip .lm-val.bad { color: #ff4757; }
+@media (max-width: 1100px) {
+  #live-metrics-strip { grid-template-columns: repeat(3, 1fr); }
+}
+</style>
+
+<script id="analysis-extra-live">
+// Additional live metrics for Analysis page
+(function(){
+  if (window.__extraLive) return;
+  window.__extraLive = true;
+
+  // Insert the live metrics strip at the top of page5 (right after page-header)
+  function injectStrip(){
+    var p5 = document.getElementById('page5');
+    if (!p5) return false;
+    if (document.getElementById('live-metrics-strip')) return true;
+
+    var header = p5.querySelector('.page-header');
+    if (!header){ setTimeout(injectStrip, 400); return false; }
+
+    var strip = document.createElement('div');
+    strip.id = 'live-metrics-strip';
+    strip.innerHTML =
+      '<div class="lm-tile"><div class="lm-lbl">Vessels Tracked</div><div class="lm-val" id="lm-vessels">--</div></div>' +
+      '<div class="lm-tile"><div class="lm-lbl">Live Density</div><div class="lm-val" id="lm-density">--</div></div>' +
+      '<div class="lm-tile"><div class="lm-lbl">Spread Rate</div><div class="lm-val" id="lm-spread">--</div></div>' +
+      '<div class="lm-tile"><div class="lm-lbl">AI Confidence</div><div class="lm-val acc" id="lm-conf">--</div></div>' +
+      '<div class="lm-tile"><div class="lm-lbl">Wave Height</div><div class="lm-val" id="lm-wave">--</div></div>' +
+      '<div class="lm-tile"><div class="lm-lbl">SST</div><div class="lm-val" id="lm-sst">--</div></div>';
+
+    header.parentNode.insertBefore(strip, header.nextSibling);
+    console.log('[extra-live] strip injected');
+    return true;
+  }
+
+  var tries = 0;
+  var timer = setInterval(function(){
+    tries++;
+    if (injectStrip() || tries > 60) clearInterval(timer);
+  }, 400);
+
+  function setTxt(id, v){ var e=document.getElementById(id); if(e) e.textContent=v; }
+
+  // Watch the ticker values (already being fed elsewhere) and mirror them
+  setInterval(function(){
+    if (window.__analysisPaused) return;
+
+    var ships = document.getElementById('tick-ships');
+    var density = document.getElementById('tick-density');
+    var wave = document.getElementById('tick-wave');
+    var sst = document.getElementById('tick-sst');
+
+    if (ships) setTxt('lm-vessels', ships.textContent);
+    if (density){
+      var d = parseFloat(density.textContent) || 0;
+      setTxt('lm-density', d.toFixed(1) + ' µg/L');
+      var color = d >= 150 ? 'bad' : d >= 100 ? 'warn' : d >= 50 ? 'warn' : 'acc';
+      var el = document.getElementById('lm-density');
+      if (el) el.className = 'lm-val ' + color;
+    }
+    var spreadEl = document.getElementById('anaSpread');
+    if (spreadEl){
+      var sv = spreadEl.textContent.replace(/[^0-9.]/g,'');
+      setTxt('lm-spread', sv + ' km/h');
+    }
+    var confEl = document.getElementById('anaAcc');
+    if (confEl){
+      setTxt('lm-conf', confEl.textContent.replace(/\s+/g,' ').trim());
+    }
+    if (wave) setTxt('lm-wave', wave.textContent + ' m');
+    if (sst) setTxt('lm-sst', sst.textContent + ' °C');
+  }, 1000);
+
+  console.log('[extra-live] armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
