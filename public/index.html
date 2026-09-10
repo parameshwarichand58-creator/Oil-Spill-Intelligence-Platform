@@ -2966,7 +2966,7 @@ input:focus,select:focus,textarea:focus{
 
   // Wait for the page to render, then start
   setTimeout(poll, 500);
-  setInterval(poll, 30000);
+  setInterval(poll, 5000);
 })();
 </script><script>
 // Threat level updater — v2, targets element by structure, not font-size
@@ -3058,7 +3058,7 @@ input:focus,select:focus,textarea:focus{
   }
 
   setTimeout(poll, 800);
-  setInterval(poll, 15000);
+  setInterval(poll, 5000);
 })();
 </script><script>
 // Threat level v3 — targets the exact IDs
@@ -3116,7 +3116,7 @@ input:focus,select:focus,textarea:focus{
     }
   }, 500);
 
-  setInterval(poll, 15000);
+  setInterval(poll, 5000);
 })();
 </script><script>
 // Threat level v4 — MutationObserver wins any race
@@ -3192,7 +3192,7 @@ input:focus,select:focus,textarea:focus{
   }
 
   poll();
-  setInterval(poll, 15000);
+  setInterval(poll, 5000);
 })();
 </script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
@@ -3244,7 +3244,7 @@ input:focus,select:focus,textarea:focus{
 
   // Fetch density every 15s
   poll();
-  setInterval(poll, 15000);
+  setInterval(poll, 5000);
 
   // Enforce every 1s — catches ANY overwrite by original page code
   setInterval(enforce, 1000);
@@ -3307,6 +3307,7 @@ input:focus,select:focus,textarea:focus{
 
 
 <!-- trigger redeploy -->
+
 
 
 
