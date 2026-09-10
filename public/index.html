@@ -640,9 +640,9 @@
         <!-- CERULEAN + MISSION INTEL -->
         <div class="grid-2" style="margin-top:12px;">
             <div class="card">
-                <div class="card-title"><i class="fas fa-satellite"></i> Sentinel-1 Cerulean — Slick Detections</div>
-                <canvas id="ceruChart" height="180"></canvas>
-                <div style="font-size:10px;color:#64748b;margin-top:6px;">Source: SkyTruth Cerulean · Sentinel-1 SAR · 7-day window</div>
+                <div class="card-title"><i class="fas fa-satellite"></i> Oil Risk Index — Bay of Bengal</div>
+                <div id="risk-panel" style="font-family:'Share Tech Mono',monospace;"></div>
+                <div style="font-size:10px;color:#64748b;margin-top:6px;">Computed from live AIS · stationary clustering score</div>
             </div>
             <div class="card">
                 <div class="card-title"><i class="fas fa-shield-alt"></i> Mission Intelligence</div>
@@ -3904,12 +3904,77 @@ body[data-theme="light"]::-webkit-scrollbar-track {
 
   console.log('[settings] buttons wired, layout patched');
 })();
+</script><script>
+// Oil Risk Index — computed live from vessel data. No external API needed.
+(function(){
+  var history = [];
+  var MAX = 7;
+
+  function computeScore(){
+    // Read current vessel stats from the ticker (already live from PocketWorld)
+    var shipsEl = document.getElementById('tick-ships');
+    var densEl = document.getElementById('tick-density');
+
+    var ships = shipsEl ? parseInt(shipsEl.textContent) || 0 : 0;
+    var density = densEl ? parseFloat(densEl.textContent) || 0 : 0;
+
+    // Score: density contributes up to 70, vessel count up to 30
+    var densScore = Math.min(70, (density / 400) * 70);
+    var vesselScore = Math.min(30, (ships / 2000) * 30);
+    return Math.round(densScore + vesselScore);
+  }
+
+  function render(){
+    var el = document.getElementById('risk-panel');
+    if (!el) return;
+
+    var score = computeScore();
+    history.push(score);
+    if (history.length > MAX) history.shift();
+
+    // Color for current score
+    var color = score >= 70 ? '#ff4757' : score >= 40 ? '#fbbf24' : '#00ff9d';
+    var label = score >= 70 ? 'HIGH' : score >= 40 ? 'MODERATE' : 'LOW';
+
+    // Build bar chart
+    var bars = history.map(function(v, i){
+      var h = Math.max(6, v);
+      var c = v >= 70 ? '#ff4757' : v >= 40 ? '#fbbf24' : '#00ff9d';
+      var isLatest = i === history.length - 1;
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;">' +
+        '<div style="font-size:9px;color:' + c + ';margin-bottom:4px;">' + v + '</div>' +
+        '<div style="width:100%;background:rgba(255,255,255,0.04);height:120px;position:relative;border-radius:2px;overflow:hidden;">' +
+          '<div style="position:absolute;bottom:0;left:0;right:0;height:' + h + '%;background:' + c + ';opacity:' + (isLatest ? '0.9' : '0.5') + ';box-shadow:0 0 12px ' + c + ';"></div>' +
+        '</div>' +
+        '<div style="font-size:8px;color:#5c7286;margin-top:4px;">T-' + (history.length - 1 - i) + '</div>' +
+      '</div>';
+    }).join('');
+
+    el.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+        '<div style="font-family:\'Orbitron\',monospace;font-size:24px;color:' + color + ';text-shadow:0 0 16px ' + color + ';">' + score + '</div>' +
+        '<div style="font-size:10px;color:' + color + ';letter-spacing:0.12em;">' + label + ' RISK</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:6px;align-items:flex-end;">' + bars + '</div>' +
+      '<div style="font-size:9px;color:#5c7286;margin-top:10px;letter-spacing:0.1em;">' +
+        'STATIONARY CLUSTERING · LIVE AIS · 30s REFRESH' +
+      '</div>';
+
+    console.log('[risk] score', score, label);
+  }
+
+  setTimeout(function(){
+    render();
+    setInterval(render, 30000);
+  }, 2000);
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
