@@ -3,6 +3,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 
 const VR_BASE = 'https://data.aisvesseltracker.com';
 const CERULEAN_BASE = 'https://api.cerulean.skytruth.org';
+const POCKETWORLD_URL = 'https://pocketworld.org/api/ships';
 const VR_KEY = process.env.VR_API_KEY;
 const PORT = process.env.PORT || 3004;
 const POLL_MS = 30000;
@@ -11,14 +12,19 @@ const DENSITY_MS = 5000;
 const BBOX = { swLat: 5.0, swLng: 78.0, neLat: 23.0, neLng: 95.0 };
 const vessels = new Map();
 let lastDensity = 0;
-
-if (!VR_KEY) { console.error('VR_API_KEY missing'); process.exit(1); }
+let vrBroken = false;
 
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/json');
   if (req.url === '/' || req.url === '/health') {
-    return res.end(JSON.stringify({ ok:true, vessels: vessels.size, density: lastDensity, uptime: process.uptime() }));
+    return res.end(JSON.stringify({
+      ok: true,
+      vessels: vessels.size,
+      density: lastDensity,
+      source: vrBroken ? 'pocketworld' : 'voyageradar',
+      uptime: process.uptime()
+    }));
   }
   if (req.url.startsWith('/api/cerulean')) {
     try {
@@ -31,11 +37,16 @@ const server = http.createServer(async (req, res) => {
   res.end(JSON.stringify({ error: 'not found' }));
 });
 
-async function pollVessels() {
+async function pollVoyageRadar() {
+  if (!VR_KEY) return false;
   try {
     const url = `${VR_BASE}/v1/vessels/bbox?swLat=${BBOX.swLat}&swLng=${BBOX.swLng}&neLat=${BBOX.neLat}&neLng=${BBOX.neLng}`;
     const r = await fetch(url, { headers: { 'X-API-Key': VR_KEY, 'Accept': 'application/json' } });
-    if (!r.ok) { console.error(`[vr] HTTP ${r.status}`); return; }
+    if (!r.ok) {
+      console.error(`[vr] HTTP ${r.status}`);
+      if (r.status === 402 || r.status === 401) vrBroken = true;
+      return false;
+    }
     const data = await r.json();
     const features = data.features || [];
     features.forEach(f => {
@@ -52,11 +63,54 @@ async function pollVessels() {
         ts: Date.now()
       });
     });
-    const cutoff = Date.now() - 15 * 60 * 1000;
-    for (const [k, v] of vessels) if (v.ts < cutoff) vessels.delete(k);
     console.log(`[vr] poll: ${features.length} in view, cache ${vessels.size}`);
     broadcast({ type: 'snapshot', vessels: [...vessels.values()], ts: Date.now() });
-  } catch (e) { console.error('[vr] error:', e.message); }
+    return true;
+  } catch (e) {
+    console.error('[vr] error:', e.message);
+    return false;
+  }
+}
+
+async function pollPocketWorld() {
+  try {
+    const r = await fetch(POCKETWORLD_URL);
+    if (!r.ok) { console.error(`[pocketworld] HTTP ${r.status}`); return; }
+    const data = await r.json();
+    const ships = data.ships || [];
+    let added = 0;
+    ships.forEach(s => {
+      const lat = parseFloat(s.lat);
+      const lon = parseFloat(s.lng);
+      if (!isFinite(lat) || !isFinite(lon)) return;
+      const mmsi = String(s.mmsi || '');
+      if (!mmsi) return;
+      vessels.set(mmsi, {
+        mmsi, name: s.name || `MMSI ${mmsi}`,
+        lat, lon,
+        speed: parseFloat(s.sog || 0),
+        course: parseFloat(s.cog || s.heading || 0),
+        flag: s.country_code || '', country: s.country || '',
+        type: s.type_name || '', navStatus: s.nav_status || '',
+        ts: Date.now()
+      });
+      added++;
+    });
+    // Cleanup old entries
+    const cutoff = Date.now() - 15 * 60 * 1000;
+    for (const [k, v] of vessels) if (v.ts < cutoff) vessels.delete(k);
+    console.log(`[pocketworld] ${ships.length} global, ${added} added, cache ${vessels.size}`);
+    broadcast({ type: 'snapshot', vessels: [...vessels.values()], ts: Date.now() });
+  } catch (e) {
+    console.error('[pocketworld] error:', e.message);
+  }
+}
+
+async function pollVessels() {
+  const ok = await pollVoyageRadar();
+  if (!ok) {
+    await pollPocketWorld();
+  }
 }
 
 function broadcastDensity() {
@@ -83,7 +137,7 @@ function broadcastDensity() {
     confidence: 75 + Math.min(20, stationaryRatio * 25),
     vessels: vessels.size
   });
-  console.log(`[density] ${density.toFixed(1)} ug/L (stationary ${stationary}/${sampleSize}, avg ${avgSpeed.toFixed(1)} kt)`);
+  console.log(`[density] ${density.toFixed(1)} ug/L (sample ${sampleSize}, cache ${vessels.size})`);
 }
 
 const wss = new WebSocket.Server({ server, path: '/stream' });
@@ -103,11 +157,9 @@ function broadcast(frame) {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Relay listening on port ${PORT}`);
-  console.log(`  Voyage Radar poll: every ${POLL_MS/1000}s`);
+  console.log(`  Voyage Radar poll: every ${POLL_MS/1000}s (fallback: PocketWorld)`);
   console.log(`  Density broadcast: every ${DENSITY_MS/1000}s`);
   pollVessels();
   setInterval(pollVessels, POLL_MS);
   setInterval(broadcastDensity, DENSITY_MS);
 });
-
-
