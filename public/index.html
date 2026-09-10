@@ -440,19 +440,19 @@
 
     <!-- PAGE 2: MAP -->
     <div class="page" id="page2"><style id="fresh-map-css">
-#fresh-map-wrap {
+#page2 #fresh-map-wrap {
   position: relative;
   display: grid;
   grid-template-columns: 220px 1fr;
   gap: 12px;
   margin-top: 12px;
 }
-#fresh-map-sidebar {
+#page2 #fresh-map-sidebar {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.scenario-btn {
+#page2 .scenario-btn {
   background: rgba(8,14,22,0.85);
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 4px;
@@ -468,28 +468,28 @@
   align-items: center;
   gap: 8px;
 }
-.scenario-btn:hover {
+#page2 .scenario-btn:hover {
   border-color: rgba(0,255,157,0.4);
   background: rgba(0,255,157,0.06);
 }
-.scenario-btn.selected {
+#page2 .scenario-btn.selected {
   border-color: #00ff9d;
   background: rgba(0,255,157,0.12);
   box-shadow: 0 0 14px rgba(0,255,157,0.25);
   color: #fff;
 }
-.scenario-btn .dot {
+#page2 .scenario-btn .dot {
   width: 8px; height: 8px; border-radius: 50%;
   flex-shrink: 0;
 }
-#fresh-map-container {
+#page2 #fresh-map-container {
   height: 520px;
   border-radius: 4px;
   overflow: hidden;
   border: 1px solid rgba(0,255,157,0.2);
   background: #0a1420;
 }
-#fresh-map-status {
+#page2 #fresh-map-status {
   margin-top: 10px;
   padding: 10px 14px;
   background: rgba(8,14,22,0.85);
@@ -502,25 +502,31 @@
   grid-template-columns: 1fr 1fr 1fr;
   gap: 10px;
 }
-#fresh-map-status .val { color: #fff; font-family: 'Orbitron', monospace; }
+#page2 #fresh-map-status .val { color: #fff; font-family: 'Orbitron', monospace; }
 #fresh-map-status .val.risk-LOW { color: #00ff9d; }
 #fresh-map-status .val.risk-MODERATE { color: #fbbf24; }
 #fresh-map-status .val.risk-HIGH { color: #ff4757; }
 #fresh-map-status .val.risk-SEVERE { color: #ff4757; }
-.map-actions {
-  display: flex; gap: 8px; margin-top: 10px;
+#page2 .map-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  justify-content: flex-end;
 }
-.map-actions button {
-  flex: 1; padding: 10px;
-  border-radius: 4px;
+#page2 #page2 .map-actions button {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border-radius: 3px;
   font-family: 'Share Tech Mono', monospace;
-  font-size: 11px; letter-spacing: 0.1em;
-  cursor: pointer; transition: all 0.2s;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.15s;
 }
-#btn-trigger { background: rgba(255,71,87,0.12); color: #ff4757; border: 1px solid rgba(255,71,87,0.5); }
-#btn-trigger:hover { background: rgba(255,71,87,0.22); box-shadow: 0 0 16px rgba(255,71,87,0.3); }
-#btn-goto { background: rgba(0,212,255,0.1); color: #00d4ff; border: 1px solid rgba(0,212,255,0.4); }
-#btn-goto:hover { background: rgba(0,212,255,0.2); box-shadow: 0 0 16px rgba(0,212,255,0.3); }
+#page2 #btn-trigger { background: rgba(255,71,87,0.12); color: #ff4757; border: 1px solid rgba(255,71,87,0.5); }
+#page2 #btn-trigger:hover { background: rgba(255,71,87,0.22); box-shadow: 0 0 16px rgba(255,71,87,0.3); }
+#page2 #btn-goto { background: rgba(0,212,255,0.1); color: #00d4ff; border: 1px solid rgba(0,212,255,0.4); }
+#page2 #btn-goto:hover { background: rgba(0,212,255,0.2); box-shadow: 0 0 16px rgba(0,212,255,0.3); }
 .map-scenario-marker {
   background: transparent !important;
   border: none !important;
@@ -5440,6 +5446,7 @@ body { padding-right: 0 !important; }
 
 
 <!-- trigger redeploy -->
+
 
 
 
