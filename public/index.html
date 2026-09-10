@@ -2865,12 +2865,65 @@ input:focus,select:focus,textarea:focus{
   updateOcean();
   setInterval(updateOcean, 600000);
 })();
+</script><script>
+// Ocean retry — waits for the dynamically-created panel, then updates
+(function(){
+  var values = null;
+
+  async function fetchMarine(){
+    try {
+      var r = await fetch('https://marine-api.open-meteo.com/v1/marine?latitude=13.0827&longitude=80.2707&current=wave_height,wave_direction,wave_period,sea_surface_temperature');
+      var d = await r.json();
+      if (!d.current) return null;
+      return {
+        wh:  (d.current.wave_height||0).toFixed(1),
+        sst: (d.current.sea_surface_temperature||0).toFixed(1),
+        wd:  Math.round(d.current.wave_direction||0),
+        wp:  (d.current.wave_period||0).toFixed(1)
+      };
+    } catch(e) { console.warn('[ocean] fetch failed:', e.message); return null; }
+  }
+
+  function apply(){
+    if (!values) return false;
+    var e1 = document.getElementById('oceanWaveHeight');
+    var e2 = document.getElementById('oceanSST');
+    var e3 = document.getElementById('oceanWaveDir');
+    var e4 = document.getElementById('oceanWavePeriod');
+    var hit = false;
+    if (e1) { e1.textContent = values.wh + ' m'; hit = true; }
+    if (e2) { e2.textContent = values.sst + '\u00B0C'; hit = true; }
+    if (e3) { e3.textContent = values.wd + '\u00B0'; hit = true; }
+    if (e4) { e4.textContent = values.wp + ' s'; hit = true; }
+    if (hit) console.log('[ocean] applied', values.wh, values.sst, values.wd, values.wp);
+    return hit;
+  }
+
+  async function refresh(){
+    values = await fetchMarine();
+    apply();
+  }
+
+  // Watch for the panel appearing (it's built by other scripts)
+  var tries = 0;
+  var fastTimer = setInterval(function(){
+    tries++;
+    if (apply() || tries > 40) clearInterval(fastTimer);
+  }, 500);
+
+  // Initial fetch + apply as soon as data arrives
+  refresh();
+
+  // Keep refreshing every 5 minutes
+  setInterval(refresh, 300000);
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
