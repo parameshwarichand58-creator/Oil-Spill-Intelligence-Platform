@@ -3435,12 +3435,105 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[preview] standalone armed');
 })();
+</script><script id="no-robot-alert">
+// Disable robot voice / alarm popups triggered by image analysis — show only clean result
+(function(){
+  if (window.__noRobotAlert) return;
+  window.__noRobotAlert = true;
+
+  // Silence all voice / sound / popup functions during image analysis
+  var SUPPRESS = false;
+
+  // Wrap speech synthesis
+  try {
+    if (window.speechSynthesis && !window.speechSynthesis.__wrapped){
+      var origSpeak = window.speechSynthesis.speak.bind(window.speechSynthesis);
+      window.speechSynthesis.speak = function(u){
+        if (SUPPRESS) return;
+        return origSpeak(u);
+      };
+      window.speechSynthesis.__wrapped = true;
+    }
+  } catch(e){}
+
+  // Wrap Audio() constructor for alarm sounds
+  try {
+    if (!window.__origAudio){
+      window.__origAudio = window.Audio;
+      window.Audio = function(src){
+        if (SUPPRESS){
+          // Return a silent dummy that pretends to play
+          var dummy = { play: function(){ return Promise.resolve(); }, pause: function(){}, currentTime: 0, loop: false, volume: 0 };
+          return dummy;
+        }
+        return new window.__origAudio(src);
+      };
+    }
+  } catch(e){}
+
+  // Neutralize the alert popup function if it exists
+  function silenceAlertTriggers(){
+    var p7 = document.getElementById('page7');
+    if (!p7) return;
+
+    // When on the Image Analysis page, force-hide the alert popup unless user clicked something else
+    var popup = document.getElementById('alertPopup');
+    if (popup && p7.classList.contains('active')){
+      // Only hide if it was auto-triggered by the analysis (not user-clicked)
+      if (popup.classList.contains('show') && window.__lastAnalysisAt && Date.now() - window.__lastAnalysisAt < 3000){
+        popup.classList.remove('show');
+        popup.style.display = 'none';
+      }
+    }
+  }
+
+  // Track when analyze runs (via click on Analyze button)
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest('#analyzeBtn');
+    if (!btn) return;
+    window.__lastAnalysisAt = Date.now();
+    SUPPRESS = true;
+    // Re-enable after 6 seconds
+    setTimeout(function(){ SUPPRESS = false; }, 6000);
+  }, true);
+
+  // Also suppress when the change event fires on the image input
+  document.addEventListener('change', function(e){
+    if (e.target && e.target.id === 'imageInput'){
+      window.__lastAnalysisAt = Date.now();
+      SUPPRESS = true;
+      setTimeout(function(){ SUPPRESS = false; }, 6000);
+    }
+  }, true);
+
+  // Periodically hide any alert popup that shows up while we're on the Image page
+  setInterval(silenceAlertTriggers, 500);
+
+  // Also stop any running alarm/speech intervals if they get set
+  setInterval(function(){
+    var p7 = document.getElementById('page7');
+    if (p7 && p7.classList.contains('active')){
+      try {
+        if (window.soundInterval){ clearInterval(window.soundInterval); window.soundInterval = null; }
+        if (window.speechInterval){ clearInterval(window.speechInterval); window.speechInterval = null; }
+      } catch(e){}
+      var popup = document.getElementById('alertPopup');
+      if (popup && popup.classList.contains('show')){
+        popup.classList.remove('show');
+        popup.style.display = 'none';
+      }
+    }
+  }, 500);
+
+  console.log('[no-robot-alert] voice + alarm suppressed on Image Analysis page');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
