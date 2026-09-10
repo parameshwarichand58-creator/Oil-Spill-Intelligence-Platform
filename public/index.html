@@ -2458,13 +2458,39 @@ if (typeof toggleLiveSatellite === 'undefined') {
     }catch(e){}
   }
   async function marine(){
-    try{var r=await fetch('https://marine-api.open-meteo.com/v1/marine?latitude=13.0827&longitude=80.2707&current=wave_height,sea_surface_temperature');
+    try{
+      var r=await fetch('https://marine-api.open-meteo.com/v1/marine?latitude=13.0827&longitude=80.2707&current=wave_height,wave_direction,wave_period,sea_surface_temperature');
       var d=await r.json();
       if(d.current){
-        set('tick-wave',(d.current.wave_height||0).toFixed(1));
-        set('tick-sst',(d.current.sea_surface_temperature||0).toFixed(1));
+        var wh = (d.current.wave_height||0).toFixed(1);
+        var wd = Math.round(d.current.wave_direction||0);
+        var wp = (d.current.wave_period||0).toFixed(1);
+        var sst = (d.current.sea_surface_temperature||0).toFixed(1);
+        // Ticker
+        set('tick-wave', wh);
+        set('tick-sst', sst);
+        // Dashboard card (created dynamically with these IDs)
+        set('oceanWaveHeight', wh + ' m');
+        set('oceanSST', sst + '°C');
+        set('oceanWaveDir', wd + '°');
+        set('oceanWavePeriod', wp + ' s');
+        // Best-effort fallback: scan for any element with these labels
+        try{
+          var all = document.querySelectorAll('*');
+          for (var i=0;i<all.length;i++){
+            var el = all[i];
+            if (el.children.length===0){
+              var t = (el.textContent||'').trim();
+              if (t==='WAVE HEIGHT' && el.previousElementSibling) el.previousElementSibling.textContent = wh + ' m';
+              if (t==='SEA SURFACE TEMP' && el.previousElementSibling) el.previousElementSibling.textContent = sst + '°C';
+              if (t==='WAVE DIRECTION' && el.previousElementSibling) el.previousElementSibling.textContent = wd + '°';
+              if (t==='WAVE PERIOD' && el.previousElementSibling) el.previousElementSibling.textContent = wp + ' s';
+            }
+          }
+        }catch(_){}
+        console.log('[ocean] wave', wh, 'sst', sst, 'dir', wd, 'period', wp);
       }
-    }catch(e){}
+    }catch(e){ console.warn('[ocean]', e.message); }
   }
   async function ceru(){
     try{var r=await fetch(RELAY+'/api/cerulean');var d=await r.json();
@@ -2748,13 +2774,39 @@ input:focus,select:focus,textarea:focus{
     }catch(e){}
   }
   async function marine(){
-    try{var r=await fetch('https://marine-api.open-meteo.com/v1/marine?latitude=13.0827&longitude=80.2707&current=wave_height,sea_surface_temperature');
+    try{
+      var r=await fetch('https://marine-api.open-meteo.com/v1/marine?latitude=13.0827&longitude=80.2707&current=wave_height,wave_direction,wave_period,sea_surface_temperature');
       var d=await r.json();
       if(d.current){
-        set('tick-wave',(d.current.wave_height||0).toFixed(1));
-        set('tick-sst',(d.current.sea_surface_temperature||0).toFixed(1));
+        var wh = (d.current.wave_height||0).toFixed(1);
+        var wd = Math.round(d.current.wave_direction||0);
+        var wp = (d.current.wave_period||0).toFixed(1);
+        var sst = (d.current.sea_surface_temperature||0).toFixed(1);
+        // Ticker
+        set('tick-wave', wh);
+        set('tick-sst', sst);
+        // Dashboard card (created dynamically with these IDs)
+        set('oceanWaveHeight', wh + ' m');
+        set('oceanSST', sst + '°C');
+        set('oceanWaveDir', wd + '°');
+        set('oceanWavePeriod', wp + ' s');
+        // Best-effort fallback: scan for any element with these labels
+        try{
+          var all = document.querySelectorAll('*');
+          for (var i=0;i<all.length;i++){
+            var el = all[i];
+            if (el.children.length===0){
+              var t = (el.textContent||'').trim();
+              if (t==='WAVE HEIGHT' && el.previousElementSibling) el.previousElementSibling.textContent = wh + ' m';
+              if (t==='SEA SURFACE TEMP' && el.previousElementSibling) el.previousElementSibling.textContent = sst + '°C';
+              if (t==='WAVE DIRECTION' && el.previousElementSibling) el.previousElementSibling.textContent = wd + '°';
+              if (t==='WAVE PERIOD' && el.previousElementSibling) el.previousElementSibling.textContent = wp + ' s';
+            }
+          }
+        }catch(_){}
+        console.log('[ocean] wave', wh, 'sst', sst, 'dir', wd, 'period', wp);
       }
-    }catch(e){}
+    }catch(e){ console.warn('[ocean]', e.message); }
   }
   async function ceru(){
     try{var r=await fetch(RELAY+'/api/cerulean');var d=await r.json();
@@ -2777,6 +2829,7 @@ input:focus,select:focus,textarea:focus{
 
 
 <!-- trigger redeploy -->
+
 
 
 
