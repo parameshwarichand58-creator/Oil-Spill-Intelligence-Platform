@@ -6,7 +6,7 @@ const CERULEAN_BASE = 'https://api.cerulean.skytruth.org';
 const POCKETWORLD_URL = 'https://pocketworld.org/api/ships';
 const VR_KEY = process.env.VR_API_KEY;
 const PORT = process.env.PORT || 3004;
-const POLL_MS = 30000;
+const POLL_MS = 300000;
 const DENSITY_MS = 5000;
 
 const BBOX = { swLat: 5.0, swLng: 78.0, neLat: 23.0, neLng: 95.0 };
@@ -163,3 +163,4 @@ server.listen(PORT, '0.0.0.0', () => {
   setInterval(pollVessels, POLL_MS);
   setInterval(broadcastDensity, DENSITY_MS);
 });
+
