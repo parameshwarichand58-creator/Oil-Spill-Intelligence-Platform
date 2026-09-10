@@ -5262,12 +5262,151 @@ body { padding-right: 0 !important; }
 
   console.log('[strict] armed — 6-scenario detector');
 })();
+</script><style id="analysis-compact">
+/* --- Compact Analysis page --- */
+#page5 .grid-2 { gap: 8px !important; }
+#page5 .card { padding: 8px 10px !important; }
+#page5 .card-title { font-size: 9px !important; margin-bottom: 6px !important; padding-bottom: 5px !important; }
+#page5 canvas { max-height: 130px !important; }
+#page5 h2 { font-size: 15px !important; margin-bottom: 4px !important; }
+#page5 p { font-size: 10px !important; margin-bottom: 8px !important; }
+#page5 .kpi { font-size: 16px !important; }
+#page5 table { font-size: 10px !important; }
+#page5 table th, #page5 table td { padding: 4px 6px !important; }
+
+/* --- Pause button (only visible on Analysis page) --- */
+#analysis-pause {
+  display: none;
+  position: fixed; top: 40px; right: 20px; z-index: 9999;
+  background: rgba(8,14,22,0.92); color: #00ff9d;
+  border: 1px solid rgba(0,255,157,0.45);
+  border-radius: 4px; padding: 6px 14px;
+  font-family: 'Share Tech Mono', monospace; font-size: 10px;
+  letter-spacing: 0.12em; cursor: pointer;
+  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+  text-shadow: 0 0 8px rgba(0,255,157,0.5);
+}
+#analysis-pause:hover { background: rgba(0,255,157,0.12); box-shadow: 0 0 18px rgba(0,255,157,0.25); }
+#analysis-pause.paused {
+  color: #fbbf24; border-color: rgba(251,191,36,0.55);
+  text-shadow: 0 0 8px rgba(251,191,36,0.5);
+}
+body.analysis-page #analysis-pause { display: block; }
+
+/* --- Paused overlay badge --- */
+#analysis-paused-badge {
+  display: none;
+  position: fixed; top: 40px; left: 50%; transform: translateX(-50%);
+  z-index: 9999; padding: 5px 16px;
+  background: rgba(251,191,36,0.15); color: #fbbf24;
+  border: 1px solid rgba(251,191,36,0.55);
+  border-radius: 4px;
+  font-family: 'Share Tech Mono', monospace; font-size: 10px;
+  letter-spacing: 0.14em;
+  backdrop-filter: blur(10px);
+  text-shadow: 0 0 10px rgba(251,191,36,0.6);
+}
+body.analysis-paused #analysis-paused-badge { display: block; }
+</style>
+
+<button id="analysis-pause" title="Pause / Resume Analysis updates">⏸ PAUSE</button>
+<div id="analysis-paused-badge">◉ ANALYSIS PAUSED</div>
+
+<script id="analysis-pause-logic">
+(function(){
+  // --- Guard: only patch once ---
+  if (window.__analysisPatchInstalled) return;
+  window.__analysisPatchInstalled = true;
+
+  // --- Patch Chart.js update() so charts freeze when paused ---
+  function patchChart(){
+    if (typeof Chart === 'undefined') { setTimeout(patchChart, 300); return; }
+    if (window.__chartPatched) return;
+    window.__chartPatched = true;
+    var origUpdate = Chart.prototype.update;
+    Chart.prototype.update = function(){
+      if (window.__analysisPaused) return this;
+      return origUpdate.apply(this, arguments);
+    };
+    console.log('[pause] Chart.update patched');
+  }
+  patchChart();
+
+  // --- Patch DOM setters so only elements inside page5 freeze ---
+  function inAnalysisPage(node){
+    try {
+      if (!node || node.nodeType !== 1) return false;
+      return !!(node.closest && node.closest('#page5'));
+    } catch(e){ return false; }
+  }
+
+  // textContent
+  try {
+    var origTC = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+    if (origTC && origTC.set){
+      Object.defineProperty(Node.prototype, 'textContent', {
+        configurable: true,
+        enumerable: origTC.enumerable,
+        get: origTC.get,
+        set: function(v){
+          if (window.__analysisPaused && inAnalysisPage(this)) return;
+          return origTC.set.call(this, v);
+        }
+      });
+    }
+  } catch(e){ console.warn('[pause] textContent patch failed', e); }
+
+  // innerHTML
+  try {
+    var origIH = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+    if (origIH && origIH.set){
+      Object.defineProperty(Element.prototype, 'innerHTML', {
+        configurable: true,
+        enumerable: origIH.enumerable,
+        get: origIH.get,
+        set: function(v){
+          if (window.__analysisPaused && inAnalysisPage(this)) return;
+          return origIH.set.call(this, v);
+        }
+      });
+    }
+  } catch(e){ console.warn('[pause] innerHTML patch failed', e); }
+
+  // --- Show button only when Analysis page is visible ---
+  function watchPage(){
+    var p5 = document.getElementById('page5');
+    if (p5){
+      var active = p5.classList.contains('active');
+      document.body.classList.toggle('analysis-page', active);
+    }
+  }
+  setInterval(watchPage, 400);
+
+  // --- Button handler ---
+  function hookBtn(){
+    var btn = document.getElementById('analysis-pause');
+    if (!btn) { setTimeout(hookBtn, 400); return; }
+    btn.addEventListener('click', function(){
+      window.__analysisPaused = !window.__analysisPaused;
+      document.body.classList.toggle('analysis-paused', window.__analysisPaused);
+      btn.textContent = window.__analysisPaused ? '▶ RESUME' : '⏸ PAUSE';
+      btn.classList.toggle('paused', window.__analysisPaused);
+      console.log('[pause]', window.__analysisPaused ? 'PAUSED' : 'RESUMED');
+    });
+    console.log('[pause] button hooked');
+  }
+  hookBtn();
+
+  console.log('[pause] system armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
