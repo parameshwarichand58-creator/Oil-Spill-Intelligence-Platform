@@ -360,7 +360,7 @@
 
 <div class="main-content" id="mainContent">
     <!-- PAGE 1: DASHBOARD -->
-    <div class="page active" id="page1"><div id="top-hero" style="display:grid;grid-template-columns:160px 1fr;gap:12px;margin-bottom:12px;"><div class="card" style="padding:8px;display:flex;flex-direction:column;align-items:center;"><canvas id="earthCanvas" width="150" height="150"></canvas><div style="font-family:'Share Tech Mono',monospace;font-size:8px;color:#00ff9d;letter-spacing:0.16em;margin-top:4px;text-shadow:0 0 6px #00ff9d;">◉ EARTH LIVE</div></div><div class="card" style="padding:8px;display:flex;flex-direction:column;"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;"><div class="card-title" style="margin:0;font-size:9px;"><i class="fas fa-satellite"></i> NASA MODIS · BAY OF BENGAL</div><div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#5c7286;" id="heroDate">--</div></div><img id="heroSat" src="" style="width:100%;height:130px;object-fit:cover;border-radius:2px;border:1px solid rgba(0,255,157,0.14);background:#000;" alt="NASA satellite"/><div style="display:flex;justify-content:space-between;margin-top:6px;font-family:'Share Tech Mono',monospace;font-size:8px;color:#5c7286;"><span>TERRA · TRUE-COLOR · 250m</span><span id="heroDay">--</span></div></div></div>
+    <div class="page active" id="page1">
         <div class="page-header">
             <h2>📊 <span class="highlight" id="page1Title">Mission Dashboard</span></h2>
             <p id="page1Sub">Real-time oil spill monitoring & intelligence</p>
@@ -2823,78 +2823,590 @@ input:focus,select:focus,textarea:focus{
   setInterval(marine,600000);
   setInterval(ceru,120000);
 })();
+</script><script>
+// Safe ocean panel updater — additive only, touches nothing else
+(function(){
+  async function updateOcean(){
+    try{
+      var r = await fetch('https://marine-api.open-meteo.com/v1/marine?latitude=13.0827&longitude=80.2707&current=wave_height,wave_direction,wave_period,sea_surface_temperature');
+      var d = await r.json();
+      if (!d.current) return;
+      var wh  = (d.current.wave_height||0).toFixed(1);
+      var wd  = Math.round(d.current.wave_direction||0);
+      var wp  = (d.current.wave_period||0).toFixed(1);
+      var sst = (d.current.sea_surface_temperature||0).toFixed(1);
+
+      // Write by ID (dashboard card)
+      var el1 = document.getElementById('oceanWaveHeight');
+      var el2 = document.getElementById('oceanSST');
+      var el3 = document.getElementById('oceanWaveDir');
+      var el4 = document.getElementById('oceanWavePeriod');
+      if (el1) el1.textContent = wh + ' m';
+      if (el2) el2.textContent = sst + '\u00B0C';
+      if (el3) el3.textContent = wd + '\u00B0';
+      if (el4) el4.textContent = wp + ' s';
+
+      // Fallback: find by label text
+      var all = document.querySelectorAll('*');
+      for (var i=0;i<all.length;i++){
+        var el = all[i];
+        if (el.children.length > 0) continue;
+        var t = (el.textContent||'').trim();
+        var prev = el.previousElementSibling;
+        if (!prev) continue;
+        if (t === 'WAVE HEIGHT')     prev.textContent = wh + ' m';
+        if (t === 'SEA SURFACE TEMP') prev.textContent = sst + '\u00B0C';
+        if (t === 'WAVE DIRECTION')  prev.textContent = wd + '\u00B0';
+        if (t === 'WAVE PERIOD')     prev.textContent = wp + ' s';
+      }
+      console.log('[ocean]', wh, sst, wd, wp);
+    }catch(e){ console.warn('[ocean]', e.message); }
+  }
+  updateOcean();
+  setInterval(updateOcean, 600000);
+})();
+</script><script>
+// Ocean retry — waits for the dynamically-created panel, then updates
+(function(){
+  var values = null;
+
+  async function fetchMarine(){
+    try {
+      var r = await fetch('https://marine-api.open-meteo.com/v1/marine?latitude=13.0827&longitude=80.2707&current=wave_height,wave_direction,wave_period,sea_surface_temperature');
+      var d = await r.json();
+      if (!d.current) return null;
+      return {
+        wh:  (d.current.wave_height||0).toFixed(1),
+        sst: (d.current.sea_surface_temperature||0).toFixed(1),
+        wd:  Math.round(d.current.wave_direction||0),
+        wp:  (d.current.wave_period||0).toFixed(1)
+      };
+    } catch(e) { console.warn('[ocean] fetch failed:', e.message); return null; }
+  }
+
+  function apply(){
+    if (!values) return false;
+    var e1 = document.getElementById('oceanWaveHeight');
+    var e2 = document.getElementById('oceanSST');
+    var e3 = document.getElementById('oceanWaveDir');
+    var e4 = document.getElementById('oceanWavePeriod');
+    var hit = false;
+    if (e1) { e1.textContent = values.wh + ' m'; hit = true; }
+    if (e2) { e2.textContent = values.sst + '\u00B0C'; hit = true; }
+    if (e3) { e3.textContent = values.wd + '\u00B0'; hit = true; }
+    if (e4) { e4.textContent = values.wp + ' s'; hit = true; }
+    if (hit) console.log('[ocean] applied', values.wh, values.sst, values.wd, values.wp);
+    return hit;
+  }
+
+  async function refresh(){
+    values = await fetchMarine();
+    apply();
+  }
+
+  // Watch for the panel appearing (it's built by other scripts)
+  var tries = 0;
+  var fastTimer = setInterval(function(){
+    tries++;
+    if (apply() || tries > 40) clearInterval(fastTimer);
+  }, 500);
+
+  // Initial fetch + apply as soon as data arrives
+  refresh();
+
+  // Keep refreshing every 5 minutes
+  setInterval(refresh, 300000);
+})();
+</script><script>
+// Threat Level live updater — reads density from relay, updates the display
+(function(){
+  var RELAY = 'https://oil-spill-intelligence-platform.onrender.com';
+
+  function threatFor(d){
+    if (d >= 400) return { txt:'SEVERE',   color:'#ff4757' };
+    if (d >= 150) return { txt:'HIGH',     color:'#ff4757' };
+    if (d >= 50)  return { txt:'MODERATE', color:'#fbbf24' };
+    return          { txt:'LOW',      color:'#00d4aa' };
+  }
+
+  function applyThreat(d){
+    var t = threatFor(d);
+
+    // The big threat word (font-size 34-40, Orbitron)
+    var all = document.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++){
+      var el = all[i];
+      if (el.children.length > 0) continue;
+      var txt = (el.textContent || '').trim();
+      if (/^(LOW|MODERATE|HIGH|SEVERE)$/.test(txt)){
+        var fs = parseInt(el.style.fontSize || '0', 10);
+        if (fs >= 20){
+          el.textContent = t.txt;
+          el.style.color = t.color;
+        }
+      }
+      // The note under the threat level
+      if (/^No active threats|escalate per threshold|All systems nominal/.test(txt)){
+        el.textContent = (t.txt === 'LOW')
+          ? 'No active threats · All systems nominal'
+          : t.txt + ' · escalate per threshold table';
+      }
+    }
+    console.log('[threat]', t.txt, 'for density', d.toFixed(1));
+  }
+
+  async function poll(){
+    try {
+      var r = await fetch(RELAY + '/health');
+      var data = await r.json();
+      var d = typeof data.density === 'number' ? data.density : 0;
+      applyThreat(d);
+    } catch(e) { console.warn('[threat] poll failed:', e.message); }
+  }
+
+  // Wait for the page to render, then start
+  setTimeout(poll, 500);
+  setInterval(poll, 5000);
+})();
+</script><script>
+// Threat level updater — v2, targets element by structure, not font-size
+(function(){
+  var RELAY = 'https://oil-spill-intelligence-platform.onrender.com';
+  var lastDensity = null;
+
+  function threatFor(d){
+    if (d >= 400) return { txt:'SEVERE',   color:'#ff4757' };
+    if (d >= 150) return { txt:'HIGH',     color:'#ff4757' };
+    if (d >= 50)  return { txt:'MODERATE', color:'#fbbf24' };
+    return          { txt:'LOW',      color:'#00d4aa' };
+  }
+
+  function findThreatElement(){
+    // Find the label "Current Threat Level" then walk to find the big word
+    var all = document.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++){
+      var el = all[i];
+      var t = (el.textContent || '').trim();
+      if (t === 'Current Threat Level'){
+        // Walk up to the container, then find the biggest text child
+        var container = el.parentElement;
+        for (var up = 0; up < 4 && container; up++){
+          var candidates = container.querySelectorAll('*');
+          for (var j = 0; j < candidates.length; j++){
+            var c = candidates[j];
+            if (c.children.length > 0) continue;
+            var ct = (c.textContent || '').trim();
+            if (/^(LOW|MODERATE|HIGH|SEVERE)$/.test(ct)){
+              return c;
+            }
+          }
+          container = container.parentElement;
+        }
+      }
+    }
+    return null;
+  }
+
+  function applyThreat(d){
+    var t = threatFor(d);
+    var el = findThreatElement();
+    if (el){
+      el.textContent = t.txt;
+      el.style.color = t.color;
+      el.style.transition = 'color 0.4s ease';
+    }
+
+    // Update the note below
+    var all = document.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++){
+      var n = all[i];
+      if (n.children.length > 0) continue;
+      var nt = (n.textContent || '').trim();
+      if (/^No active threats|escalate per threshold|All systems nominal/.test(nt)){
+        n.textContent = (t.txt === 'LOW')
+          ? 'No active threats \u00B7 All systems nominal'
+          : t.txt + ' \u00B7 escalate per threshold table';
+      }
+    }
+
+    // Highlight the correct segment in the threat bar
+    var segs = document.querySelectorAll('*');
+    for (var k = 0; k < segs.length; k++){
+      var s = segs[k];
+      if (s.children.length > 0) continue;
+      var st = (s.textContent || '').trim();
+      if (/^(LOW|MODERATE|HIGH|SEVERE)$/i.test(st) && s !== el){
+        // This is a segment label — dim or highlight
+        var isActive = st.toUpperCase() === t.txt;
+        s.style.opacity = isActive ? '1' : '0.4';
+      }
+    }
+
+    console.log('[threat]', t.txt, 'for density', d.toFixed(1));
+  }
+
+  async function poll(){
+    try {
+      var r = await fetch(RELAY + '/health');
+      var data = await r.json();
+      var d = typeof data.density === 'number' ? data.density : 0;
+      if (d !== lastDensity){
+        lastDensity = d;
+        applyThreat(d);
+      }
+    } catch(e) { console.warn('[threat]', e.message); }
+  }
+
+  setTimeout(poll, 800);
+  setInterval(poll, 5000);
+})();
+</script><script>
+// Threat level v3 — targets the exact IDs
+(function(){
+  var RELAY = 'https://oil-spill-intelligence-platform.onrender.com';
+  var lastDensity = null;
+
+  function threatFor(d){
+    if (d >= 400) return { txt:'SEVERE',   color:'#ff4757', bar:95, reason:'SEVERE \u00B7 full response, continuous SAR tasking' };
+    if (d >= 150) return { txt:'HIGH',     color:'#ff4757', bar:70, reason:'HIGH \u00B7 open incident, notify coast guard' };
+    if (d >= 50)  return { txt:'MODERATE', color:'#fbbf24', bar:45, reason:'MODERATE \u00B7 escalate per threshold table' };
+    return          { txt:'LOW',      color:'#00ff88', bar:20, reason:'No active threats \u00B7 All systems nominal' };
+  }
+
+  function applyThreat(d){
+    var t = threatFor(d);
+    var textEl = document.getElementById('threatLevelText');
+    var barEl  = document.getElementById('threatBar');
+    var reasonEl = document.getElementById('threatReason');
+
+    if (textEl){
+      textEl.textContent = t.txt;
+      textEl.style.color = t.color;
+      textEl.style.textShadow = '0 0 20px ' + t.color;
+    }
+    if (barEl){
+      barEl.style.width = t.bar + '%';
+    }
+    if (reasonEl){
+      reasonEl.textContent = t.reason;
+    }
+
+    console.log('[threat] ' + t.txt + ' for density ' + d.toFixed(1) + ' ug/L');
+  }
+
+  async function poll(){
+    try {
+      var r = await fetch(RELAY + '/health');
+      var data = await r.json();
+      var d = typeof data.density === 'number' ? data.density : 0;
+      if (d !== lastDensity){
+        lastDensity = d;
+        applyThreat(d);
+      }
+    } catch(e) { console.warn('[threat]', e.message); }
+  }
+
+  // Retry every 500ms for 30s until the element appears
+  var tries = 0;
+  var fast = setInterval(function(){
+    tries++;
+    if (document.getElementById('threatLevelText') || tries > 60){
+      clearInterval(fast);
+      poll();
+    }
+  }, 500);
+
+  setInterval(poll, 5000);
+})();
+</script><script>
+// Threat level v4 — MutationObserver wins any race
+(function(){
+  var RELAY = 'https://oil-spill-intelligence-platform.onrender.com';
+  var currentDensity = 0;
+  var currentLevel = 'LOW';
+
+  function threatFor(d){
+    if (d >= 400) return { txt:'SEVERE',   color:'#ff4757', bar:95, reason:'SEVERE \u00B7 full response, continuous SAR tasking' };
+    if (d >= 150) return { txt:'HIGH',     color:'#ff4757', bar:70, reason:'HIGH \u00B7 open incident, notify coast guard' };
+    if (d >= 50)  return { txt:'MODERATE', color:'#fbbf24', bar:45, reason:'MODERATE \u00B7 escalate per threshold table' };
+    return          { txt:'LOW',      color:'#00ff88', bar:20, reason:'No active threats \u00B7 All systems nominal' };
+  }
+
+  function enforce(){
+    var t = threatFor(currentDensity);
+    currentLevel = t.txt;
+
+    var textEl = document.getElementById('threatLevelText');
+    var barEl  = document.getElementById('threatBar');
+    var reasonEl = document.getElementById('threatReason');
+
+    if (textEl && textEl.textContent !== t.txt){
+      textEl.textContent = t.txt;
+      textEl.style.color = t.color;
+      textEl.style.textShadow = '0 0 20px ' + t.color;
+    } else if (textEl && textEl.style.color !== t.color){
+      textEl.style.color = t.color;
+    }
+    if (barEl && barEl.style.width !== t.bar + '%'){
+      barEl.style.width = t.bar + '%';
+    }
+    if (reasonEl && reasonEl.textContent !== t.reason){
+      reasonEl.textContent = t.reason;
+    }
+  }
+
+  // Watch for any change to the threat elements and re-enforce
+  var observer = new MutationObserver(function(){
+    var t = threatFor(currentDensity);
+    var textEl = document.getElementById('threatLevelText');
+    if (textEl && textEl.textContent !== t.txt){
+      enforce();
+    }
+  });
+
+  // Attach observer once element exists
+  var attachTries = 0;
+  var attachTimer = setInterval(function(){
+    attachTries++;
+    var textEl = document.getElementById('threatLevelText');
+    if (textEl){
+      observer.observe(document.body, { subtree:true, childList:true, characterData:true, attributes:true, attributeFilter:['style'] });
+      clearInterval(attachTimer);
+      console.log('[threat] observer attached');
+      enforce();
+    }
+    if (attachTries > 120) clearInterval(attachTimer); // give up after 60s
+  }, 500);
+
+  async function poll(){
+    try {
+      var r = await fetch(RELAY + '/health');
+      var data = await r.json();
+      var d = typeof data.density === 'number' ? data.density : 0;
+      if (d !== currentDensity){
+        currentDensity = d;
+        enforce();
+        console.log('[threat] MODERATE for density ' + d.toFixed(1) + ' ug/L');
+      }
+    } catch(e) { console.warn('[threat]', e.message); }
+  }
+
+  poll();
+  setInterval(poll, 5000);
+})();
 </script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
+// ============ Earth Hero + Orbiting Satellites ============
 (function(){
-  function bootEarth(){
-    var c = document.getElementById('earthCanvas');
-    if (!c || typeof THREE === 'undefined'){ setTimeout(bootEarth, 400); return; }
-    if (c.dataset.booted === '1') return;
-    c.dataset.booted = '1';
+  var HERO_HTML =
+    '<div class="card" style="display:grid;grid-template-columns:320px 1fr;gap:16px;padding:14px;margin-bottom:12px;">' +
+      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;border-right:1px solid rgba(0,255,157,0.08);padding-right:12px;">' +
+        '<div style="font-family:\'Share Tech Mono\',monospace;font-size:9px;color:#00ff9d;letter-spacing:0.2em;text-shadow:0 0 8px #00ff9d;margin-bottom:6px;">◉ EARTH · LIVE ORBITAL VIEW</div>' +
+        '<canvas id="earthCanvas" width="300" height="300"></canvas>' +
+        '<div style="font-family:\'Share Tech Mono\',monospace;font-size:8px;color:#5c7286;letter-spacing:0.14em;margin-top:4px;">3 TRACKED OBJECTS · LEO</div>' +
+      '</div>' +
+      '<div>' +
+        '<div class="card-title" style="margin-bottom:10px;"><i class="fas fa-satellite"></i> Mission Overview · Live Orbital Tracking</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">' +
+          '<div style="padding:10px 12px;background:rgba(0,255,157,0.04);border-left:3px solid #00ff9d;border-radius:3px;">' +
+            '<div style="font-family:\'Share Tech Mono\',monospace;font-size:9px;color:#5c7286;letter-spacing:0.14em;">🛰️ ISS · INTERNATIONAL SPACE STATION</div>' +
+            '<div style="font-family:\'Orbitron\',monospace;font-size:14px;color:#00ff9d;margin-top:5px;font-variant-numeric:tabular-nums;" id="issLat">--</div>' +
+            '<div style="font-family:\'Orbitron\',monospace;font-size:14px;color:#00d4ff;font-variant-numeric:tabular-nums;" id="issLon">--</div>' +
+            '<div style="font-size:9px;color:#64748b;margin-top:4px;font-family:\'Share Tech Mono\',monospace;">ALT <span id="issAlt">--</span> km · VEL <span id="issVel">--</span> km/h</div>' +
+          '</div>' +
+          '<div style="padding:10px 12px;background:rgba(74,158,255,0.04);border-left:3px solid #4a9eff;border-radius:3px;">' +
+            '<div style="font-family:\'Share Tech Mono\',monospace;font-size:9px;color:#5c7286;letter-spacing:0.14em;">🛰️ NASA MODIS · TERRA / AQUA</div>' +
+            '<div style="font-family:\'Orbitron\',monospace;font-size:14px;color:#4a9eff;margin-top:5px;">ONLINE</div>' +
+            '<div style="font-size:9px;color:#64748b;margin-top:4px;font-family:\'Share Tech Mono\',monospace;">True-color · 250 m res · daily revisit</div>' +
+          '</div>' +
+          '<div style="padding:10px 12px;background:rgba(255,153,51,0.04);border-left:3px solid #ff9933;border-radius:3px;">' +
+            '<div style="font-family:\'Share Tech Mono\',monospace;font-size:9px;color:#5c7286;letter-spacing:0.14em;">🛰️ ISRO RISAT · SAR CONSTELLATION</div>' +
+            '<div style="font-family:\'Orbitron\',monospace;font-size:14px;color:#ff9933;margin-top:5px;">ONLINE</div>' +
+            '<div style="font-size:9px;color:#64748b;margin-top:4px;font-family:\'Share Tech Mono\',monospace;">C-band SAR · cloud-penetrating</div>' +
+          '</div>' +
+          '<div style="padding:10px 12px;background:rgba(148,163,184,0.04);border-left:3px solid #94a3b8;border-radius:3px;">' +
+            '<div style="font-family:\'Share Tech Mono\',monospace;font-size:9px;color:#5c7286;letter-spacing:0.14em;">🛰️ SENTINEL-1 · CERULEAN FEED</div>' +
+            '<div style="font-family:\'Orbitron\',monospace;font-size:14px;color:#94a3b8;margin-top:5px;">ONLINE</div>' +
+            '<div style="font-size:9px;color:#64748b;margin-top:4px;font-family:\'Share Tech Mono\',monospace;">Slick detections · <span id="heroCeru">0</span> in AOI</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  function inject(){
+    var page1 = document.getElementById('page1');
+    if (!page1) return false;
+    if (document.getElementById('earthCanvas')) return true;
+    var wrap = document.createElement('div');
+    wrap.innerHTML = HERO_HTML;
+    page1.insertBefore(wrap.firstElementChild, page1.firstChild);
+    startGlobe();
+    startISS();
+    startCeruPoll();
+    return true;
+  }
+
+  var tries = 0;
+  var t = setInterval(function(){
+    tries++;
+    if (inject() || tries > 240) clearInterval(t);
+  }, 500);
+
+  // ---------- Globe with orbiting satellites ----------
+  var satellites = [];
+  var issAngle = 0;
+  var modisAngle = 0;
+  var risatAngle = 0;
+
+  function startGlobe(){
+    var canvas = document.getElementById('earthCanvas');
+    if (!canvas || typeof THREE === 'undefined'){ console.warn('[globe] three.js missing'); return; }
+
     var scene = new THREE.Scene();
-    var cam = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-    cam.position.z = 3.0;
-    var r = new THREE.WebGLRenderer({ canvas:c, alpha:true, antialias:true });
-    r.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
-    r.setSize(150, 150, false);
-    var tex = new THREE.TextureLoader();
-    tex.crossOrigin = 'anonymous';
+    var camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+    camera.position.z = 3.4;
+
+    var renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(300, 300, false);
+
+    var loader = new THREE.TextureLoader();
+    loader.crossOrigin = 'anonymous';
+    var tex = loader.load(
+      'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
+      function(){ console.log('[globe] texture loaded'); },
+      undefined,
+      function(){ console.warn('[globe] texture failed'); }
+    );
+
     var earth = new THREE.Mesh(
-      new THREE.SphereGeometry(1, 48, 48),
-      new THREE.MeshPhongMaterial({ map: tex.load('https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg'), shininess:8, specular:0x1a2530 })
+      new THREE.SphereGeometry(1, 64, 64),
+      new THREE.MeshPhongMaterial({ map: tex, shininess: 8, specular: 0x1a2530 })
     );
     earth.rotation.z = -0.4;
     scene.add(earth);
+
     var atmo = new THREE.Mesh(
-      new THREE.SphereGeometry(1.06, 48, 48),
-      new THREE.MeshBasicMaterial({ color:0x00d4ff, transparent:true, opacity:0.14, side:THREE.BackSide })
+      new THREE.SphereGeometry(1.06, 64, 64),
+      new THREE.MeshBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.14, side: THREE.BackSide })
     );
     scene.add(atmo);
-    var light = new THREE.DirectionalLight(0xffffff, 1.3);
-    light.position.set(5, 3, 4);
-    scene.add(light);
+
+    // ---- Satellite factory ----
+    function makeSat(color, orbitRadius, tilt){
+      var group = new THREE.Group();
+
+      // Orbit ring
+      var ringGeo = new THREE.RingGeometry(orbitRadius - 0.004, orbitRadius + 0.004, 96);
+      var ringMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.25, side: THREE.DoubleSide });
+      var ring = new THREE.Mesh(ringGeo, ringMat);
+      group.add(ring);
+
+      // Satellite body — small glowing sphere
+      var satGeo = new THREE.SphereGeometry(0.035, 16, 16);
+      var satMat = new THREE.MeshBasicMaterial({ color: color });
+      var sat = new THREE.Mesh(satGeo, satMat);
+      sat.position.set(orbitRadius, 0, 0);
+      group.add(sat);
+
+      // Halo around satellite
+      var haloGeo = new THREE.SphereGeometry(0.07, 16, 16);
+      var haloMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.35 });
+      var halo = new THREE.Mesh(haloGeo, haloMat);
+      halo.position.set(orbitRadius, 0, 0);
+      group.add(halo);
+
+      group.rotation.x = tilt;
+      scene.add(group);
+
+      return { group: group, sat: sat, halo: halo, orbitRadius: orbitRadius, angle: Math.random() * Math.PI * 2 };
+    }
+
+    // Three satellites — different radii, tilts, colors
+    var issSat = makeSat(0x00ff9d, 1.35, 0.2);
+    var modisSat = makeSat(0x4a9eff, 1.6, -0.35);
+    var risatSat = makeSat(0xff9933, 1.85, 0.55);
+
+    satellites = [issSat, modisSat, risatSat];
+
+    var key = new THREE.DirectionalLight(0xffffff, 1.3);
+    key.position.set(5, 3, 4);
+    scene.add(key);
     scene.add(new THREE.AmbientLight(0x1a2530, 1.4));
+
     var paused = false;
     document.addEventListener('visibilitychange', function(){ paused = document.hidden; });
+
     function loop(){
       requestAnimationFrame(loop);
       if (paused) return;
-      earth.rotation.y += 0.0025;
-      atmo.rotation.y += 0.0012;
-      r.render(scene, cam);
+
+      // Earth rotates
+      earth.rotation.y += 0.0022;
+      atmo.rotation.y += 0.0011;
+
+      // Satellites orbit
+      issSat.angle += 0.018;    // fastest — LEO
+      modisSat.angle += 0.011;
+      risatSat.angle += 0.008;
+      issAngle = issSat.angle;
+      modisAngle = modisSat.angle;
+      risatAngle = risatSat.angle;
+
+      issSat.sat.position.x = Math.cos(issSat.angle) * issSat.orbitRadius;
+      issSat.sat.position.z = Math.sin(issSat.angle) * issSat.orbitRadius;
+      issSat.sat.position.y = Math.sin(issSat.angle * 0.5) * 0.05;
+      issSat.halo.position.copy(issSat.sat.position);
+
+      modisSat.sat.position.x = Math.cos(modisSat.angle) * modisSat.orbitRadius;
+      modisSat.sat.position.z = Math.sin(modisSat.angle) * modisSat.orbitRadius;
+      modisSat.sat.position.y = Math.sin(modisSat.angle * 0.5) * 0.05;
+      modisSat.halo.position.copy(modisSat.sat.position);
+
+      risatSat.sat.position.x = Math.cos(risatSat.angle) * risatSat.orbitRadius;
+      risatSat.sat.position.z = Math.sin(risatSat.angle) * risatSat.orbitRadius;
+      risatSat.sat.position.y = Math.sin(risatSat.angle * 0.5) * 0.05;
+      risatSat.halo.position.copy(risatSat.sat.position);
+
+      renderer.render(scene, camera);
     }
     loop();
-    console.log('[earth] active');
+    console.log('[globe] active — 3 satellites orbiting');
   }
-  bootEarth();
 
-  var days = [];
-  for (var i = 0; i < 7; i++){
-    var d = new Date();
-    d.setDate(d.getDate() - i);
-    days.push(d.toISOString().slice(0,10));
+  // ---------- ISS live data ----------
+  function startISS(){
+    async function fetchISS(){
+      try{
+        var r = await fetch('https://api.wheretheiss.at/v1/satellites/25544');
+        var d = await r.json();
+        var latEl = document.getElementById('issLat');
+        var lonEl = document.getElementById('issLon');
+        var altEl = document.getElementById('issAlt');
+        var velEl = document.getElementById('issVel');
+        if (latEl) latEl.textContent = 'LAT ' + d.latitude.toFixed(2) + '\u00B0';
+        if (lonEl) lonEl.textContent = 'LON ' + d.longitude.toFixed(2) + '\u00B0';
+        if (altEl) altEl.textContent = d.altitude.toFixed(0);
+        if (velEl) velEl.textContent = d.velocity.toFixed(0);
+      }catch(e){ console.warn('[iss]', e.message); }
+    }
+    fetchISS();
+    setInterval(fetchISS, 5000);
   }
-  var dayIdx = 0;
-  function gibsUrl(date){
-    return 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
-      '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0' +
-      '&LAYERS=MODIS_Terra_CorrectedReflectance_TrueColor' +
-      '&FORMAT=image/jpeg&TRANSPARENT=FALSE&STYLES=' +
-      '&CRS=EPSG:4326&BBOX=5,78,23,95&WIDTH=500&HEIGHT=300&TIME=' + date;
+
+  // ---------- Cerulean count ----------
+  function startCeruPoll(){
+    async function fetchCeru(){
+      try{
+        var r = await fetch('https://oil-spill-intelligence-platform.onrender.com/api/cerulean');
+        var d = await r.json();
+        var el = document.getElementById('heroCeru');
+        if (el) el.textContent = (d.features || []).length;
+      }catch(e){}
+    }
+    fetchCeru();
+    setInterval(fetchCeru, 120000);
   }
-  function cycleSat(){
-    var img = document.getElementById('heroSat');
-    if (!img) return;
-    var d = days[dayIdx];
-    img.src = gibsUrl(d);
-    var dateEl = document.getElementById('heroDate');
-    var dayEl = document.getElementById('heroDay');
-    if (dateEl) dateEl.textContent = d;
-    if (dayEl) dayEl.textContent = 'DAY ' + (dayIdx === 0 ? 'T' : 'T-' + dayIdx);
-    dayIdx = (dayIdx + 1) % days.length;
-  }
-  cycleSat();
-  setInterval(cycleSat, 3000);
 })();
 </script></html>
 
@@ -2902,6 +3414,15 @@ input:focus,select:focus,textarea:focus{
 
 
 <!-- trigger redeploy -->
+
+
+
+
+
+
+
+
+
 
 
 
