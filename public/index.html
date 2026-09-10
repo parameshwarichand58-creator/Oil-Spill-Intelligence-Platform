@@ -5540,7 +5540,12 @@ body { padding-right: 0 !important; }
       prev = document.createElement('img');
       prev.id = 'imgPreview';
       prev.alt = 'preview';
-      card.appendChild(prev);
+      var resultBox = document.getElementById('analysisResult');
+      if (resultBox && resultBox.parentElement === card){
+        card.insertBefore(prev, resultBox);
+      } else {
+        card.appendChild(prev);
+      }
     }
 
     if (input.dataset.previewWired) return;
@@ -5566,6 +5571,7 @@ body { padding-right: 0 !important; }
 
 
 <!-- trigger redeploy -->
+
 
 
 
