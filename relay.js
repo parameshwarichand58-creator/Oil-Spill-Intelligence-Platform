@@ -62,7 +62,7 @@ async function pollVessels() {
 function broadcastDensity() {
   if (vessels.size === 0) return;
   const all = [...vessels.values()];
-  const sampleSize = Math.min(60, all.length);
+  const sampleSize = Math.min(30, all.length);
   let stationary = 0, totalSpeed = 0;
   for (let i = 0; i < sampleSize; i++) {
     const v = all[Math.floor(Math.random() * all.length)];
@@ -109,4 +109,5 @@ server.listen(PORT, '0.0.0.0', () => {
   setInterval(pollVessels, POLL_MS);
   setInterval(broadcastDensity, DENSITY_MS);
 });
+
 
