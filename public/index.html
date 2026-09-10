@@ -3366,12 +3366,82 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[dash-hero] armed');
 })();
+</script><script id="img-preview-standalone">
+// Standalone image preview — shows uploaded image above the result box
+(function(){
+  if (window.__imgPreview) return;
+  window.__imgPreview = true;
+
+  function getOrCreatePreview(){
+    var el = document.getElementById('imgPreview');
+    if (el) return el;
+    var result = document.getElementById('analysisResult');
+    if (!result) return null;
+    var parent = result.parentElement;
+    if (!parent) return null;
+    var img = document.createElement('img');
+    img.id = 'imgPreview';
+    img.alt = 'Uploaded image';
+    img.style.cssText = 'display:none;max-width:100%;max-height:360px;width:auto;border-radius:4px;border:1px solid rgba(0,255,157,0.3);margin:14px auto 12px;object-fit:contain;background:#050a12;box-shadow:0 0 20px rgba(0,255,157,0.08);';
+    parent.insertBefore(img, result);
+    console.log('[preview] element created');
+    return img;
+  }
+
+  function wire(){
+    var input = document.getElementById('imageInput');
+    if (!input){ setTimeout(wire, 400); return; }
+    if (input.dataset.previewBound) return;
+    input.dataset.previewBound = '1';
+
+    // Ensure preview element exists
+    getOrCreatePreview();
+
+    input.addEventListener('change', function(){
+      var file = input.files && input.files[0];
+      var prev = getOrCreatePreview();
+      if (!prev) return;
+
+      if (!file){
+        prev.style.display = 'none';
+        prev.src = '';
+        return;
+      }
+      var name = (file.name || '').toLowerCase();
+      if (/\.(heic|heif)$/.test(name) || /heic|heif/i.test(file.type || '')){
+        prev.style.display = 'none';
+        console.log('[preview] HEIC — not shown');
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function(ev){
+        prev.src = ev.target.result;
+        prev.style.display = 'block';
+        console.log('[preview] shown:', file.name);
+      };
+      reader.onerror = function(){
+        prev.style.display = 'none';
+        console.warn('[preview] read failed');
+      };
+      reader.readAsDataURL(file);
+    });
+
+    console.log('[preview] wired to input');
+  }
+  wire();
+
+  // Re-wire every 2 s in case the page structure redraws
+  setInterval(wire, 2000);
+
+  console.log('[preview] standalone armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
