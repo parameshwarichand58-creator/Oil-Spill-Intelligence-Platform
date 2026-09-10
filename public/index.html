@@ -2243,8 +2243,8 @@ if (typeof toggleLiveSatellite === 'undefined') {
   function setHtml(id, html){ var el = document.getElementById(id); if (el) el.innerHTML = html; }
 
   function threatLevelFor(density){
-    if (density >= 400) return { txt:'SEVERE', color:'#ff4757' };
-    if (density >= 150) return { txt:'HIGH', color:'#ff4757' };
+    if (density >= 150) return { txt:'SEVERE', color:'#ff4757' };
+    if (density >= 100) return { txt:'HIGH', color:'#ff4757' };
     if (density >= 50)  return { txt:'MODERATE', color:'#f59e0b' };
     return { txt:'LOW', color:'#00d4aa' };
   }
@@ -2320,7 +2320,7 @@ if (typeof toggleLiveSatellite === 'undefined') {
       setTxt('lastUpdate', 'Last update: just now');
 
       // --- Incidents ---
-      if (density >= 150 && !openIncident) {
+      if (density >= 100 && !openIncident) {
         openIncident = { opened: Date.now(), peak: density };
       } else if (openIncident) {
         openIncident.peak = Math.max(openIncident.peak, density);
@@ -2923,8 +2923,8 @@ input:focus,select:focus,textarea:focus{
   var RELAY = 'https://oil-spill-intelligence-platform.onrender.com';
 
   function threatFor(d){
-    if (d >= 400) return { txt:'SEVERE',   color:'#ff4757' };
-    if (d >= 150) return { txt:'HIGH',     color:'#ff4757' };
+    if (d >= 150) return { txt:'SEVERE',   color:'#ff4757' };
+    if (d >= 100) return { txt:'HIGH',     color:'#ff4757' };
     if (d >= 50)  return { txt:'MODERATE', color:'#fbbf24' };
     return          { txt:'LOW',      color:'#00d4aa' };
   }
@@ -2975,8 +2975,8 @@ input:focus,select:focus,textarea:focus{
   var lastDensity = null;
 
   function threatFor(d){
-    if (d >= 400) return { txt:'SEVERE',   color:'#ff4757' };
-    if (d >= 150) return { txt:'HIGH',     color:'#ff4757' };
+    if (d >= 150) return { txt:'SEVERE',   color:'#ff4757' };
+    if (d >= 100) return { txt:'HIGH',     color:'#ff4757' };
     if (d >= 50)  return { txt:'MODERATE', color:'#fbbf24' };
     return          { txt:'LOW',      color:'#00d4aa' };
   }
@@ -3067,8 +3067,8 @@ input:focus,select:focus,textarea:focus{
   var lastDensity = null;
 
   function threatFor(d){
-    if (d >= 400) return { txt:'SEVERE',   color:'#ff4757', bar:95, reason:'SEVERE \u00B7 full response, continuous SAR tasking' };
-    if (d >= 150) return { txt:'HIGH',     color:'#ff4757', bar:70, reason:'HIGH \u00B7 open incident, notify coast guard' };
+    if (d >= 150) return { txt:'SEVERE',   color:'#ff4757', bar:95, reason:'SEVERE \u00B7 full response, continuous SAR tasking' };
+    if (d >= 100) return { txt:'HIGH',     color:'#ff4757', bar:70, reason:'HIGH \u00B7 open incident, notify coast guard' };
     if (d >= 50)  return { txt:'MODERATE', color:'#fbbf24', bar:45, reason:'MODERATE \u00B7 escalate per threshold table' };
     return          { txt:'LOW',      color:'#00ff88', bar:20, reason:'No active threats \u00B7 All systems nominal' };
   }
@@ -3126,8 +3126,8 @@ input:focus,select:focus,textarea:focus{
   var currentLevel = 'LOW';
 
   function threatFor(d){
-    if (d >= 400) return { txt:'SEVERE',   color:'#ff4757', bar:95, reason:'SEVERE \u00B7 full response, continuous SAR tasking' };
-    if (d >= 150) return { txt:'HIGH',     color:'#ff4757', bar:70, reason:'HIGH \u00B7 open incident, notify coast guard' };
+    if (d >= 150) return { txt:'SEVERE',   color:'#ff4757', bar:95, reason:'SEVERE \u00B7 full response, continuous SAR tasking' };
+    if (d >= 100) return { txt:'HIGH',     color:'#ff4757', bar:70, reason:'HIGH \u00B7 open incident, notify coast guard' };
     if (d >= 50)  return { txt:'MODERATE', color:'#fbbf24', bar:45, reason:'MODERATE \u00B7 escalate per threshold table' };
     return          { txt:'LOW',      color:'#00ff88', bar:20, reason:'No active threats \u00B7 All systems nominal' };
   }
@@ -4233,14 +4233,14 @@ body { padding-right: 0 !important; }
   for (var i = 0; i < nowMonth; i++) S.monthBars[i] = 3 + Math.floor(Math.random()*8);
 
   function cls(d){
-    if (d >= 400) return 'crude';
-    if (d >= 150) return 'diesel';
+    if (d >= 150) return 'crude';
+    if (d >= 100) return 'diesel';
     if (d >= 50)  return 'bilge';
     return 'unknown';
   }
   function threatFor(d){
-    if (d >= 400) return { t:'SEVERE',   c:'#ff4757', b:95 };
-    if (d >= 150) return { t:'HIGH',     c:'#ff4757', b:70 };
+    if (d >= 150) return { t:'SEVERE',   c:'#ff4757', b:95 };
+    if (d >= 100) return { t:'HIGH',     c:'#ff4757', b:70 };
     if (d >= 50)  return { t:'MODERATE', c:'#fbbf24', b:45 };
     return          { t:'LOW',      c:'#00ff88', b:20 };
   }
@@ -4512,6 +4512,7 @@ body { padding-right: 0 !important; }
 
 
 <!-- trigger redeploy -->
+
 
 
 
