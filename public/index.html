@@ -439,21 +439,337 @@
     </div>
 
     <!-- PAGE 2: MAP -->
-    <div class="page" id="page2">
-        <div class="page-header">
-            <h2>🗺️ <span class="highlight" id="mapTitle">Live Maritime Map</span></h2>
-            <p id="mapSub">Select a scenario to simulate oil spill</p>
-        </div>
-        <div class="scenario-selector">
-            <div class="scenario-card natural" onclick="selectScenario('natural')"><span class="icon">🌊</span><div class="title" id="scNatural">Natural</div><div class="desc" id="scNaturalDesc">Seepage</div><span class="badge">🌱</span></div>
-            <div class="scenario-card culprit" onclick="selectScenario('culprit')"><span class="icon">🛳️</span><div class="title" id="scCulprit">Culprit</div><div class="desc" id="scCulpritDesc">Theft</div><span class="badge">🚨</span></div>
-            <div class="scenario-card internal" onclick="selectScenario('internal')"><span class="icon">⚙️</span><div class="title" id="scInternal">Internal</div><div class="desc" id="scInternalDesc">Failure</div><span class="badge">⚠️</span></div>
-            <div class="scenario-card collision" onclick="selectScenario('collision')"><span class="icon">💥</span><div class="title" id="scCollision">Collision</div><div class="desc" id="scCollisionDesc">Accident</div><span class="badge">💢</span></div>
-            <div class="scenario-card fire" onclick="selectScenario('fire')"><span class="icon">🔥</span><div class="title" id="scFire">Fire</div><div class="desc" id="scFireDesc">Explosion</div><span class="badge">🚒</span></div>
-            <div class="scenario-card weather" onclick="selectScenario('weather')"><span class="icon">🌀</span><div class="title" id="scWeather">Weather</div><div class="desc" id="scWeatherDesc">Storm</div><span class="badge">🌪️</span></div>
-        </div>
-        <div class="map-wrapper" style="margin-top:10px;">
-            <div id="map"></div>
+    <div class="page" id="page2"><style id="fresh-map-css">
+#fresh-map-wrap {
+  position: relative;
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+#fresh-map-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.scenario-btn {
+  background: rgba(8,14,22,0.85);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #c9d8ea;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.scenario-btn:hover {
+  border-color: rgba(0,255,157,0.4);
+  background: rgba(0,255,157,0.06);
+}
+.scenario-btn.selected {
+  border-color: #00ff9d;
+  background: rgba(0,255,157,0.12);
+  box-shadow: 0 0 14px rgba(0,255,157,0.25);
+  color: #fff;
+}
+.scenario-btn .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  flex-shrink: 0;
+}
+#fresh-map-container {
+  height: 520px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid rgba(0,255,157,0.2);
+  background: #0a1420;
+}
+#fresh-map-status {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: rgba(8,14,22,0.85);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: #94a3b8;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+#fresh-map-status .val { color: #fff; font-family: 'Orbitron', monospace; }
+#fresh-map-status .val.risk-LOW { color: #00ff9d; }
+#fresh-map-status .val.risk-MODERATE { color: #fbbf24; }
+#fresh-map-status .val.risk-HIGH { color: #ff4757; }
+#fresh-map-status .val.risk-SEVERE { color: #ff4757; }
+.map-actions {
+  display: flex; gap: 8px; margin-top: 10px;
+}
+.map-actions button {
+  flex: 1; padding: 10px;
+  border-radius: 4px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px; letter-spacing: 0.1em;
+  cursor: pointer; transition: all 0.2s;
+}
+#btn-trigger { background: rgba(255,71,87,0.12); color: #ff4757; border: 1px solid rgba(255,71,87,0.5); }
+#btn-trigger:hover { background: rgba(255,71,87,0.22); box-shadow: 0 0 16px rgba(255,71,87,0.3); }
+#btn-goto { background: rgba(0,212,255,0.1); color: #00d4ff; border: 1px solid rgba(0,212,255,0.4); }
+#btn-goto:hover { background: rgba(0,212,255,0.2); box-shadow: 0 0 16px rgba(0,212,255,0.3); }
+.map-scenario-marker {
+  background: transparent !important;
+  border: none !important;
+}
+.marker-pulse {
+  width: 20px; height: 20px; border-radius: 50%;
+  position: relative;
+  animation: markerPulse 1.8s ease-out infinite;
+}
+@keyframes markerPulse {
+  0% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  100% { box-shadow: 0 0 0 24px transparent; opacity: 0.6; }
+}
+.scenario-popup .leaflet-popup-content-wrapper {
+  background: rgba(8,14,22,0.96) !important;
+  color: #c9d8ea !important;
+  border: 1px solid rgba(0,255,157,0.4) !important;
+  font-family: 'Share Tech Mono', monospace !important;
+  font-size: 11px !important;
+}
+.scenario-popup .leaflet-popup-tip { background: rgba(8,14,22,0.96) !important; }
+</style>
+
+<div id="fresh-map-wrap">
+  <div id="fresh-map-sidebar"></div>
+  <div>
+    <div id="fresh-map-container"></div>
+    <div id="fresh-map-status">
+      <div>SELECTED<br><span class="val" id="fms-sel">—</span></div>
+      <div>RISK<br><span class="val" id="fms-risk">—</span></div>
+      <div>VESSELS ON MAP<br><span class="val" id="fms-vessels">--</span></div>
+    </div>
+    <div class="map-actions">
+      <button id="btn-trigger">🚨 TRIGGER ALERT</button>
+      <button id="btn-goto">→ GO TO ALERT PAGE</button>
+    </div>
+  </div>
+</div>
+
+<script id="fresh-map-js">
+(function(){
+  if (window.__freshMap) return;
+  window.__freshMap = true;
+
+  var SCENARIOS = [
+    { id:'natural',   name:'Natural Seepage',   icon:'🌊', color:'#00d4ff', risk:'LOW',
+      lat:15.50, lng:82.30, msg:'Natural hydrocarbon seep detected on seafloor.' },
+    { id:'theft',     name:'Culprit Theft',     icon:'🛳️', color:'#fbbf24', risk:'MODERATE',
+      lat:13.90, lng:81.50, msg:'Suspected illegal ship-to-ship oil transfer.' },
+    { id:'failure',   name:'Internal Failure',  icon:'⚙️', color:'#fbbf24', risk:'MODERATE',
+      lat:12.80, lng:80.70, msg:'Vessel internal system failure — bilge discharge.' },
+    { id:'collision', name:'Collision Accident',icon:'💥', color:'#ff4757', risk:'HIGH',
+      lat:14.60, lng:82.90, msg:'Vessel collision — active spill from damaged hull.' },
+    { id:'fire',      name:'Fire Explosion',    icon:'🔥', color:'#ff4757', risk:'SEVERE',
+      lat:16.20, lng:83.10, msg:'Fire / explosion on tanker — full emergency response.' },
+    { id:'storm',     name:'Weather Storm',     icon:'🌀', color:'#a855f7', risk:'MODERATE',
+      lat:11.90, lng:84.20, msg:'Storm cell — risk of tanker hull stress and spill.' }
+  ];
+
+  var map, vesselLayer, scenarioLayer, selected = null, vesselCount = 0;
+
+  function toast(msg, color){
+    var el = document.createElement('div');
+    el.style.cssText = 'position:fixed;top:44px;right:24px;z-index:999999;background:rgba(8,14,22,0.95);border:1px solid '+color+';border-left:3px solid '+color+';border-radius:4px;padding:12px 18px;font-family:\'Share Tech Mono\',monospace;font-size:12px;color:#c9d8ea;box-shadow:0 8px 32px rgba(0,0,0,0.5);backdrop-filter:blur(12px);opacity:0;transform:translateX(20px);transition:opacity 0.3s,transform 0.3s;pointer-events:none;max-width:340px;line-height:1.5;';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(function(){ el.style.opacity='1'; el.style.transform='translateX(0)'; }, 30);
+    setTimeout(function(){ el.style.opacity='0'; el.style.transform='translateX(20px)'; setTimeout(function(){el.remove();},400); }, 3200);
+  }
+
+  function missionLog(msg){
+    var log = document.getElementById('missionLog');
+    if (!log) return;
+    var t = new Date().toTimeString().slice(0,8);
+    var d = document.createElement('div');
+    d.innerHTML = '<span style="color:#5c7286;margin-right:8px;">'+t+'</span>'+msg;
+    log.prepend(d);
+  }
+
+  function buildSidebar(){
+    var sb = document.getElementById('fresh-map-sidebar');
+    if (!sb) return;
+    sb.innerHTML = '';
+    SCENARIOS.forEach(function(sc){
+      var btn = document.createElement('button');
+      btn.className = 'scenario-btn';
+      btn.dataset.id = sc.id;
+      btn.innerHTML = '<span class="dot" style="background:'+sc.color+';box-shadow:0 0 8px '+sc.color+';"></span>' +
+                      '<span>'+sc.icon+' '+sc.name+'</span>';
+      btn.addEventListener('click', function(){ selectScenario(sc.id); });
+      sb.appendChild(btn);
+    });
+  }
+
+  function selectScenario(id){
+    var sc = SCENARIOS.find(function(s){ return s.id === id; });
+    if (!sc) return;
+    selected = sc;
+
+    document.querySelectorAll('.scenario-btn').forEach(function(b){
+      b.classList.toggle('selected', b.dataset.id === id);
+    });
+
+    document.getElementById('fms-sel').textContent = sc.name;
+    var rk = document.getElementById('fms-risk');
+    rk.textContent = sc.risk;
+    rk.className = 'val risk-' + sc.risk;
+
+    if (map){
+      map.flyTo([sc.lat, sc.lng], 7, { duration: 1.2 });
+    }
+
+    toast('◉ ' + sc.name + ' · ' + sc.risk + ' risk', sc.color);
+    console.log('[map] scenario selected:', sc.id, sc.risk);
+  }
+
+  function triggerAlert(){
+    if (!selected){ toast('⚠ Select a scenario first', '#fbbf24'); return; }
+    var sc = selected;
+
+    ['tLevelBig','threatLevelText','tLevel'].forEach(function(id){
+      var el = document.getElementById(id);
+      if (el){ el.textContent = sc.risk; el.style.color = sc.color; if (el.classList) el.style.textShadow = '0 0 20px '+sc.color; }
+    });
+
+    var bar = document.getElementById('threatBar');
+    if (bar) bar.style.width = (sc.risk==='SEVERE'?95:sc.risk==='HIGH'?70:sc.risk==='MODERATE'?45:20)+'%';
+
+    ['statAlerts','cAlerts'].forEach(function(id){
+      var el = document.getElementById(id);
+      if (el){ el.textContent = (parseInt(el.textContent)||0) + 1; }
+    });
+
+    missionLog('🚨 ALERT · ' + sc.name + ' · ' + sc.risk);
+    missionLog('📡 ' + sc.msg);
+
+    var popupTitle = document.getElementById('alertTitle');
+    if (popupTitle) popupTitle.textContent = 'ALERT · ' + sc.name;
+    var popupSub = document.getElementById('alertSub');
+    if (popupSub) popupSub.textContent = sc.msg;
+    var popupDetails = document.getElementById('alertDetails');
+    if (popupDetails) popupDetails.textContent = 'Risk: ' + sc.risk;
+
+    toast('🚨 Alert: ' + sc.name, sc.color);
+    console.log('[map] alert triggered:', sc.id);
+  }
+
+  function goToAlert(){
+    if (typeof window.showPage === 'function') window.showPage('page4');
+    else {
+      document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+      var p = document.getElementById('page4');
+      if (p) p.classList.add('active');
+    }
+    document.querySelectorAll('.nav-item').forEach(function(n){
+      n.classList.remove('active');
+      if (/alert/i.test(n.textContent)) n.classList.add('active');
+    });
+    toast('→ Alert console', '#00d4ff');
+  }
+
+  async function loadVessels(){
+    try {
+      var r = await fetch('https://pocketworld.org/api/ships');
+      if (!r.ok) return;
+      var d = await r.json();
+      var ships = d.ships || [];
+      var regional = ships.filter(function(s){
+        var lat = parseFloat(s.lat), lon = parseFloat(s.lng);
+        return isFinite(lat) && isFinite(lon) && lat >= 5 && lat <= 23 && lon >= 78 && lon <= 95;
+      });
+      var use = regional.length > 20 ? regional : ships.slice(0, 300);
+
+      vesselLayer.clearLayers();
+      var n = 0;
+      use.forEach(function(v){
+        var lat = parseFloat(v.lat), lon = parseFloat(v.lng);
+        if (!isFinite(lat) || !isFinite(lon)) return;
+        var sog = parseFloat(v.sog||0);
+        var c = sog < 0.5 ? '#fbbf24' : sog < 8 ? '#00d4ff' : sog < 15 ? '#00ff9d' : '#ff2e63';
+        L.circleMarker([lat, lon], {
+          radius: 3.5, color: c, fillColor: c, fillOpacity: 0.85, weight: 1
+        }).bindTooltip((v.name||v.mmsi)+' · '+sog.toFixed(1)+' kt').addTo(vesselLayer);
+        n++;
+      });
+      vesselCount = n;
+      document.getElementById('fms-vessels').textContent = n;
+      console.log('[map] vessels loaded:', n, 'regional of', ships.length);
+    } catch(e){ console.warn('[map] vessel fetch:', e.message); }
+  }
+
+  function init(){
+    if (typeof L === 'undefined'){ setTimeout(init, 400); return; }
+    var container = document.getElementById('fresh-map-container');
+    if (!container){ setTimeout(init, 400); return; }
+    if (container._leaflet_id) return;
+
+    map = L.map(container, { center:[14, 82], zoom:5, zoomControl:true });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OSM &copy; CARTO', subdomains:'abcd', maxZoom:19
+    }).addTo(map);
+
+    // AOI rectangle
+    L.rectangle([[5,78],[23,95]], {
+      color:'#00ff9d', weight:1, opacity:0.4, dashArray:'6,6',
+      fillColor:'#00ff9d', fillOpacity:0.02
+    }).addTo(map);
+
+    vesselLayer = L.layerGroup().addTo(map);
+    scenarioLayer = L.layerGroup().addTo(map);
+
+    // Scenario markers
+    SCENARIOS.forEach(function(sc){
+      var icon = L.divIcon({
+        className:'map-scenario-marker',
+        html:'<div class="marker-pulse" style="background:'+sc.color+';color:'+sc.color+';"></div>',
+        iconSize:[20,20], iconAnchor:[10,10]
+      });
+      var m = L.marker([sc.lat, sc.lng], { icon: icon });
+      m.bindPopup(
+        '<strong style="color:'+sc.color+';">'+sc.icon+' '+sc.name+'</strong><br>'+
+        '<div style="margin-top:6px;color:#94a3b8;">'+sc.msg+'</div>'+
+        '<div style="margin-top:6px;color:'+sc.color+';letter-spacing:0.1em;">RISK · '+sc.risk+'</div>',
+        { className:'scenario-popup' }
+      );
+      m.on('click', function(){ selectScenario(sc.id); });
+      m.addTo(scenarioLayer);
+    });
+
+    window.mapInstance = map;
+    window._mapInstance = map;
+
+    loadVessels();
+    setInterval(loadVessels, 30000);
+
+    console.log('[map] fresh map initialized');
+  }
+
+  buildSidebar();
+  init();
+
+  document.getElementById('btn-trigger').addEventListener('click', triggerAlert);
+  document.getElementById('btn-goto').addEventListener('click', goToAlert);
+
+  console.log('[map] fresh scenarios armed');
+})();
+</script>
+        id="map"></div>
             <div class="map-legend">
                 <span class="item"><span class="color green"></span> <span id="legendSpill">Spill</span></span>
                 <span class="item">🚢 <span id="legendVessel">Vessel</span></span>
@@ -5116,484 +5432,15 @@ body { padding-right: 0 !important; }
 }
 </style>
 
-<script id="map-fix">
-// Ensure Leaflet map initializes correctly
-(function(){
-  function initMap(){
-    if (typeof L === 'undefined'){ setTimeout(initMap, 400); return; }
 
-    // Find the map container
-    var el = document.getElementById('map') ||
-             document.getElementById('leaflet-map') ||
-             document.querySelector('.leaflet-container') ||
-             document.querySelector('[id*="map"]:not([id*="sitemap"])');
-    if (!el){
-      setTimeout(initMap, 800);
-      return;
-    }
 
-    // If already initialized, just invalidate size
-    if (el._leaflet_id){
-      if (window._mapInstance && typeof window._mapInstance.invalidateSize === 'function'){
-        window._mapInstance.invalidateSize();
-      }
-      return;
-    }
-
-    // Force dimensions
-    el.style.minHeight = '460px';
-    el.style.height = '460px';
-    el.style.width = '100%';
-
-    // Init the map
-    try {
-      var map = L.map(el, {
-        center: [13.08, 80.27],     // Bay of Bengal / Chennai
-        zoom: 5,
-        zoomControl: true
-      });
-
-      // Dark tiles
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 19
-      }).addTo(map);
-
-      window._mapInstance = map;
-
-      // Add a Bay of Bengal marker as a sanity check
-      L.circleMarker([13.08, 80.27], {
-        radius: 6,
-        color: '#00ff9d',
-        fillColor: '#00ff9d',
-        fillOpacity: 0.8
-      }).addTo(map).bindPopup('Bay of Bengal · AOI-1');
-
-      setTimeout(function(){ map.invalidateSize(); }, 400);
-      console.log('[map] initialized');
-    } catch(e){
-      console.warn('[map] init error:', e.message);
-    }
-  }
-  setTimeout(initMap, 800);
-
-  // Force redraw when Map page becomes visible
-  document.addEventListener('click', function(e){
-    var item = e.target.closest('.nav-item');
-    if (!item) return;
-    if (/map/i.test(item.textContent)){
-      setTimeout(function(){
-        if (window._mapInstance) window._mapInstance.invalidateSize();
-      }, 400);
-    }
-  });
-})();
-</script><script id="map-bridge">
-// Bridge: expose mapInstance as the global the enhancements expect + re-run them
-(function(){
-  function ensureGlobal(){
-    // If our fix created _mapInstance, mirror it to mapInstance
-    if (window._mapInstance && !window.mapInstance){
-      window.mapInstance = window._mapInstance;
-      console.log('[bridge] mapInstance exposed');
-      // Re-run enhancements
-      if (typeof L !== 'undefined' && L.heatLayer && !window.__heatAdded){
-        try {
-          var heatData = [
-            [22.41, 88.46, 0.8], [22.38, 88.44, 0.5], [22.40, 88.42, 0.6],
-            [22.35, 88.38, 0.4], [22.45, 88.52, 0.3]
-          ];
-          var heat = L.heatLayer(heatData, {
-            radius: 25, blur: 15, maxZoom: 17,
-            gradient: {0.4: 'blue', 0.6: 'yellow', 0.8: 'red'}
-          });
-          heat.addTo(window.mapInstance);
-          window.__heatAdded = true;
-          console.log('[bridge] heat layer added');
-        } catch(e){ console.warn('[bridge] heat failed:', e.message); }
-      }
-      if (typeof L !== 'undefined' && L.control && L.control.layers && !window.__layersAdded){
-        try {
-          var sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '&copy; ESRI' });
-          var street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OSM' });
-          L.control.layers({ 'Satellite': sat, 'Street': street }).addTo(window.mapInstance);
-          window.__layersAdded = true;
-          console.log('[bridge] layer switcher added');
-        } catch(e){ console.warn('[bridge] layers failed:', e.message); }
-      }
-      if (typeof L !== 'undefined' && L.control && L.control.fullscreen && !window.__fsAdded){
-        try {
-          L.control.fullscreen({ position: 'topleft' }).addTo(window.mapInstance);
-          window.__fsAdded = true;
-          console.log('[bridge] fullscreen added');
-        } catch(e){ console.warn('[bridge] fullscreen failed:', e.message); }
-      }
-      return true;
-    }
-    return false;
-  }
-
-  // Poll every 500 ms for up to 30 s
-  var tries = 0;
-  var t = setInterval(function(){
-    tries++;
-    if (ensureGlobal() || tries > 60) clearInterval(t);
-  }, 500);
-
-  console.log('[bridge] armed');
-})();
-</script><style id="live-vessels-map-css">
-#vessel-count-badge {
-  position: absolute; top: 12px; left: 60px; z-index: 500;
-  background: rgba(8,14,22,0.92); color: #00ff9d;
-  border: 1px solid rgba(0,255,157,0.45);
-  border-radius: 4px; padding: 6px 12px;
-  font-family: 'Share Tech Mono', monospace; font-size: 10px;
-  letter-spacing: 0.12em;
-  backdrop-filter: blur(10px);
-  text-shadow: 0 0 8px rgba(0,255,157,0.5);
-  pointer-events: none;
-}
-.vessel-popup .leaflet-popup-content-wrapper {
-  background: rgba(8,14,22,0.96) !important;
-  color: #c9d8ea !important;
-  border: 1px solid rgba(0,255,157,0.35) !important;
-  border-radius: 4px !important;
-  font-family: 'Share Tech Mono', monospace !important;
-  font-size: 11px !important;
-}
-.vessel-popup .leaflet-popup-tip {
-  background: rgba(8,14,22,0.96) !important;
-  border: 1px solid rgba(0,255,157,0.35) !important;
-}
-.vessel-popup .leaflet-popup-content { margin: 12px 14px !important; }
-.vessel-popup strong { color: #00ff9d; letter-spacing: 0.08em; }
-.vessel-popup .vrow { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-.vessel-popup .vrow:last-child { border-bottom: 0; }
-.vessel-popup .vkey { color: #5c7286; }
-.vessel-popup .vval { color: #c9d8ea; font-family: 'Orbitron', monospace; }
-.leaflet-tooltip.vessel-tip {
-  background: rgba(8,14,22,0.95); color: #00ff9d;
-  border: 1px solid rgba(0,255,157,0.4);
-  font-family: 'Share Tech Mono', monospace; font-size: 10px;
-  letter-spacing: 0.06em;
-}
-</style>
-
-<script id="live-vessels-map">
-// Live vessel markers on the map — real AIS data from PocketWorld
-(function(){
-  var layer = null;
-  var countEl = null;
-  var lastFetch = 0;
-
-  function speedColor(sog){
-    var s = parseFloat(sog || 0);
-    if (s < 0.5) return { c:'#fbbf24', label:'stationary' };
-    if (s < 8)   return { c:'#00d4ff', label:'slow' };
-    if (s < 15)  return { c:'#00ff9d', label:'cruising' };
-    return { c:'#ff2e63', label:'fast' };
-  }
-
-  function makePopup(v){
-    var sc = speedColor(v.sog);
-    return '<strong>' + (v.name || ('MMSI ' + v.mmsi)) + '</strong>' +
-      '<div class="vrow"><span class="vkey">MMSI</span><span class="vval">' + (v.mmsi || '—') + '</span></div>' +
-      '<div class="vrow"><span class="vkey">Speed</span><span class="vval">' + (parseFloat(v.sog||0).toFixed(1)) + ' kt <span style="color:'+sc.c+';">('+sc.label+')</span></span></div>' +
-      '<div class="vrow"><span class="vkey">Course</span><span class="vval">' + Math.round(parseFloat(v.cog||v.heading||0)) + '°</span></div>' +
-      '<div class="vrow"><span class="vkey">Flag</span><span class="vval">' + (v.country || v.country_code || '—') + '</span></div>' +
-      '<div class="vrow"><span class="vkey">Type</span><span class="vval">' + (v.type_name || v.type || '—') + '</span></div>' +
-      '<div class="vrow"><span class="vkey">Lat / Lon</span><span class="vval">' + parseFloat(v.lat).toFixed(3) + ', ' + parseFloat(v.lng).toFixed(3) + '</span></div>';
-  }
-
-  function ensureLayer(map){
-    if (layer) return layer;
-    layer = L.layerGroup().addTo(map);
-    // Count badge
-    var container = map.getContainer();
-    if (container && !container.querySelector('#vessel-count-badge')){
-      countEl = document.createElement('div');
-      countEl.id = 'vessel-count-badge';
-      countEl.textContent = '◉ VESSELS ON MAP: --';
-      container.appendChild(countEl);
-    }
-    return layer;
-  }
-
-  function drawAOI(map){
-    if (window.__aoiDrawn) return;
-    // Bay of Bengal bounding box: 5-23°N, 78-95°E
-    var bounds = [[5, 78], [23, 95]];
-    L.rectangle(bounds, {
-      color: '#00ff9d', weight: 1.5, opacity: 0.6, dashArray: '6,6',
-      fillColor: '#00ff9d', fillOpacity: 0.03
-    }).addTo(map).bindTooltip('Bay of Bengal · AOI-1', { sticky: true });
-    window.__aoiDrawn = true;
-    console.log('[vessels] AOI rectangle drawn');
-  }
-
-  async function fetchAndPlot(){
-    var map = window.mapInstance || window._mapInstance;
-    if (!map) return false;
-
-    try {
-      var r = await fetch('https://pocketworld.org/api/ships');
-      if (!r.ok) { console.warn('[vessels] HTTP', r.status); return true; }
-      var d = await r.json();
-      var ships = d.ships || [];
-
-      // Filter to Bay of Bengal region
-      var regional = ships.filter(function(s){
-        var lat = parseFloat(s.lat);
-        var lon = parseFloat(s.lng);
-        return isFinite(lat) && isFinite(lon) && lat >= 5 && lat <= 23 && lon >= 78 && lon <= 95;
-      });
-
-      var use = regional.length > 20 ? regional : ships.filter(function(s){
-        var lat = parseFloat(s.lat), lon = parseFloat(s.lng);
-        return isFinite(lat) && isFinite(lon) && lat >= 0 && lat <= 30 && lon >= 70 && lon <= 100;
-      });
-
-      var lyr = ensureLayer(map);
-      lyr.clearLayers();
-
-      var plotted = 0;
-      use.forEach(function(v){
-        var lat = parseFloat(v.lat);
-        var lon = parseFloat(v.lng);
-        if (!isFinite(lat) || !isFinite(lon)) return;
-        var sc = speedColor(v.sog);
-        var m = L.circleMarker([lat, lon], {
-          radius: 4,
-          color: sc.c,
-          fillColor: sc.c,
-          fillOpacity: 0.85,
-          weight: 1,
-          opacity: 0.9
-        });
-        m.bindPopup(makePopup(v), { className: 'vessel-popup', maxWidth: 260 });
-        m.bindTooltip((v.name || v.mmsi) + ' · ' + parseFloat(v.sog||0).toFixed(1) + ' kt', { className: 'vessel-tip' });
-        lyr.addLayer(m);
-        plotted++;
-      });
-
-      if (countEl) countEl.textContent = '◉ VESSELS ON MAP: ' + plotted;
-      lastFetch = Date.now();
-      console.log('[vessels] plotted', plotted, 'of', ships.length, 'global ·', regional.length, 'regional');
-      return true;
-    } catch(e){
-      console.warn('[vessels] fetch failed:', e.message);
-      return true;
-    }
-  }
-
-  // Wait for map, draw AOI, start periodic refresh
-  var tries = 0;
-  var timer = setInterval(function(){
-    tries++;
-    var map = window.mapInstance || window._mapInstance;
-    if (map){
-      clearInterval(timer);
-      drawAOI(map);
-      fetchAndPlot();
-      setInterval(fetchAndPlot, 30000);
-      console.log('[vessels] live layer armed');
-    } else if (tries > 60){
-      clearInterval(timer);
-      console.warn('[vessels] map never appeared');
-    }
-  }, 500);
-
-  console.log('[vessels] armed');
-})();
-</script><script id="map-scenario-wire">
-// Wire Map page scenario buttons + Trigger Alert + Go to Alert
-(function(){
-  if (window.__mapScenariosWired) return;
-  window.__mapScenariosWired = true;
-
-  var selectedScenario = null;
-  var SCENARIOS = {
-    'Natural Seepage':  { id:'natural', color:'#00d4ff', risk:'LOW',      msg:'Natural seepage detected — monitoring' },
-    'Culprit Theft':    { id:'theft',   color:'#fbbf24', risk:'MODERATE', msg:'Suspected illegal transfer — investigate' },
-    'Internal Failure': { id:'failure', color:'#fbbf24', risk:'MODERATE', msg:'Internal system failure — vessel disabled' },
-    'Collision Accident':{id:'collision',color:'#ff4757', risk:'HIGH',    msg:'Collision detected — immediate response' },
-    'Fire Explosion':   { id:'fire',    color:'#ff4757', risk:'SEVERE',   msg:'Fire / explosion — full emergency' },
-    'Weather Storm':    { id:'storm',   color:'#a855f7', risk:'MODERATE', msg:'Storm cell approaching — vessels at risk' }
-  };
-
-  function toast(msg, color){
-    var el = document.createElement('div');
-    el.style.cssText = 'position:fixed;top:44px;right:24px;z-index:999999;' +
-      'background:rgba(8,14,22,0.95);border:1px solid ' + color + ';' +
-      'border-left:3px solid ' + color + ';border-radius:4px;' +
-      'padding:12px 18px;font-family:\'Share Tech Mono\',monospace;font-size:12px;' +
-      'color:#c9d8ea;box-shadow:0 8px 32px rgba(0,0,0,0.5);backdrop-filter:blur(12px);' +
-      'opacity:0;transform:translateX(20px);transition:opacity 0.3s,transform 0.3s;' +
-      'pointer-events:none;max-width:340px;line-height:1.5;';
-    el.textContent = msg;
-    document.body.appendChild(el);
-    setTimeout(function(){ el.style.opacity='1'; el.style.transform='translateX(0)'; }, 30);
-    setTimeout(function(){
-      el.style.opacity='0'; el.style.transform='translateX(20px)';
-      setTimeout(function(){ el.remove(); }, 400);
-    }, 3200);
-  }
-
-  function logMission(msg){
-    var log = document.getElementById('missionLog');
-    if (!log) return;
-    var t = new Date().toTimeString().slice(0,8);
-    var div = document.createElement('div');
-    div.innerHTML = '<span style="color:#5c7286;margin-right:8px;">' + t + '</span>' + msg;
-    log.prepend(div);
-  }
-
-  function selectScenario(name){
-    var sc = SCENARIOS[name];
-    if (!sc) return;
-
-    selectedScenario = name;
-
-    // Highlight the clicked button
-    document.querySelectorAll('#page2 button, #page2 .scenario-btn, [onclick*="scenario"], [onclick*="Natural"], [onclick*="Culprit"], [onclick*="Collision"], [onclick*="Fire"], [onclick*="Weather"]').forEach(function(b){
-      var txt = (b.textContent || '').trim();
-      if (txt.indexOf(name.split(' ')[0]) >= 0 || txt.indexOf(name) >= 0){
-        b.style.borderColor = sc.color;
-        b.style.boxShadow = '0 0 16px ' + sc.color;
-      } else {
-        b.style.borderColor = '';
-        b.style.boxShadow = '';
-      }
-    });
-
-    toast('◉ Scenario selected: ' + name + ' · ' + sc.risk + ' risk', sc.color);
-    console.log('[map] scenario selected:', sc.id, sc.risk);
-  }
-
-  function triggerAlert(){
-    if (!selectedScenario){
-      toast('⚠ Select a scenario first', '#fbbf24');
-      return;
-    }
-    var sc = SCENARIOS[selectedScenario];
-
-    // Update threat level display
-    var big = document.getElementById('tLevelBig');
-    if (big){ big.textContent = sc.risk; big.style.color = sc.color; }
-    var tl = document.getElementById('threatLevelText');
-    if (tl){ tl.textContent = sc.risk; tl.style.color = sc.color; tl.style.textShadow = '0 0 20px ' + sc.color; }
-    var tl2 = document.getElementById('tLevel');
-    if (tl2){ tl2.textContent = sc.risk; }
-
-    // Update threat bar
-    var bar = document.getElementById('threatBar');
-    if (bar) bar.style.width = (sc.risk === 'SEVERE' ? 95 : sc.risk === 'HIGH' ? 70 : sc.risk === 'MODERATE' ? 45 : 20) + '%';
-
-    // Increment alerts counter
-    ['statAlerts','cAlerts','alertCount'].forEach(function(id){
-      var el = document.getElementById(id);
-      if (el){
-        var cur = parseInt(el.textContent) || 0;
-        el.textContent = cur + 1;
-      }
-    });
-
-    // Log to mission
-    logMission('🚨 ALERT TRIGGERED · ' + selectedScenario + ' · ' + sc.risk + ' risk');
-    logMission('📡 ' + sc.msg);
-
-    // Toast
-    toast('🚨 Alert triggered · ' + selectedScenario, sc.color);
-
-    // Update the popup alert box if visible
-    var popupTitle = document.getElementById('alertTitle');
-    if (popupTitle) popupTitle.textContent = 'ALERT · ' + selectedScenario;
-    var popupSub = document.getElementById('alertSub');
-    if (popupSub) popupSub.textContent = sc.msg;
-    var popupDetails = document.getElementById('alertDetails');
-    if (popupDetails) popupDetails.textContent = 'Risk: ' + sc.risk + ' · Trigger: ' + selectedScenario;
-
-    console.log('[map] alert triggered:', sc.id);
-  }
-
-  function goToAlert(){
-    // Navigate to Alert page (page4)
-    if (typeof window.showPage === 'function'){
-      window.showPage('page4');
-    } else {
-      var p = document.getElementById('page4');
-      if (p){
-        document.querySelectorAll('.page').forEach(function(x){ x.classList.remove('active'); });
-        p.classList.add('active');
-      }
-    }
-    // Highlight Alert nav item
-    document.querySelectorAll('.nav-item').forEach(function(n){
-      n.classList.remove('active');
-      if (/alert/i.test(n.textContent)) n.classList.add('active');
-    });
-    toast('Opening Alert console...', '#00d4ff');
-    console.log('[map] navigated to Alert page');
-  }
-
-  function wire(){
-    var found = 0;
-    document.querySelectorAll('button, .btn, [role="button"], div[onclick]').forEach(function(b){
-      if (b.dataset.mapWired) return;
-      var txt = (b.textContent || '').trim();
-      var oc = b.getAttribute('onclick') || '';
-
-      // Scenario buttons
-      Object.keys(SCENARIOS).forEach(function(name){
-        if (txt.indexOf(name.split(' ')[0]) === 0 || txt === name || (txt.indexOf(name) >= 0)){
-          b.dataset.mapWired = '1';
-          found++;
-          b.addEventListener('click', function(e){
-            e.preventDefault();
-            e.stopPropagation();
-            selectScenario(name);
-          }, true);
-        }
-      });
-
-      // Trigger Alert button
-      if (/trigger alert/i.test(txt)){
-        b.dataset.mapWired = '1';
-        found++;
-        b.addEventListener('click', function(e){
-          e.preventDefault();
-          e.stopPropagation();
-          triggerAlert();
-        }, true);
-      }
-
-      // Go to Alert button
-      if (/go to alert/i.test(txt)){
-        b.dataset.mapWired = '1';
-        found++;
-        b.addEventListener('click', function(e){
-          e.preventDefault();
-          e.stopPropagation();
-          goToAlert();
-        }, true);
-      }
-    });
-
-    if (found > 0) console.log('[map] wired', found, 'buttons');
-  }
-
-  wire();
-  setInterval(wire, 2000);
-  console.log('[map] scenario wiring armed');
-})();
-</script></html>
+</html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
