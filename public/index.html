@@ -3629,90 +3629,13 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[ml] real detector armed');
 })();
-</script><script id="sar-live-fix">
-// Wire SAR Scanner "Start Scan" to fetch real vessel data
-(function(){
-  if (window.__sarLive) return;
-  window.__sarLive = true;
-
-  function setTxt(id, v){ var e = document.getElementById(id); if (e) e.textContent = v; }
-
-  function setStatus(txt, color){
-    var el = document.getElementById('scanStatus') || document.querySelector('[id*="scan"][id*="Status"]');
-    if (el){ el.textContent = txt; if (color) el.style.color = color; }
-  }
-
-  async function runScan(){
-    setStatus('Scanning…', '#00d4ff');
-    setTxt('scanOil', '…');
-    setTxt('scanShips', '…');
-    setTxt('scanFormation', '…');
-
-    try {
-      // Read live values from the dashboard (already updated by ticker)
-      var shipsEl = document.getElementById('tick-ships') || document.getElementById('statShips');
-      var densEl = document.getElementById('tick-density') || document.getElementById('liveOilDensity');
-      var confEl = document.getElementById('tick-density'); // fallback
-
-      var shipCount = shipsEl ? parseInt((shipsEl.textContent||'0').replace(/[^0-9]/g,'')) || 0 : 0;
-      var density = densEl ? parseFloat((densEl.textContent||'0').replace(/[^0-9.]/g,'')) || 0 : 60;
-      if (density === 0) density = 60;
-
-      // Derive oil % from density
-      var oilPct = Math.min(95, Math.round((density / 200) * 60 + 8));
-
-      // Cluster estimate
-      var clusters = Math.max(0, Math.round(density / 25));
-
-      setTimeout(function(){
-        setTxt('scanOil', oilPct + '%');
-        setTxt('scanShips', shipCount);
-        setTxt('scanFormation', clusters);
-        setStatus('Scan complete · ' + new Date().toTimeString().slice(0,8), '#00ff9d');
-        console.log('[sar] scan done · ships', shipCount, 'density', density, 'clusters', clusters, 'oil', oilPct + '%');
-      }, 1500);
-    } catch(e){
-      setStatus('Scan failed: ' + e.message, '#ff4757');
-    }
-  }
-
-  // Find the buttons by text
-  function wire(){
-    var found = 0;
-    document.querySelectorAll('button').forEach(function(b){
-      if (b.dataset.sarWired) return;
-      var txt = (b.textContent || '').trim().toLowerCase();
-
-      if (/start scan/.test(txt)){
-        b.dataset.sarWired = '1';
-        b.addEventListener('click', function(e){ e.preventDefault(); runScan(); }, true);
-        found++;
-      }
-      if (/^reset$/.test(txt)){
-        b.dataset.sarWired = '1';
-        b.addEventListener('click', function(e){
-          e.preventDefault();
-          setTxt('scanOil', '--');
-          setTxt('scanShips', '--');
-          setTxt('scanFormation', '--');
-          setStatus('Ready', '#94a3b8');
-        }, true);
-        found++;
-      }
-    });
-    if (found) console.log('[sar] wired', found, 'buttons');
-  }
-  wire();
-  setInterval(wire, 2000);
-
-  console.log('[sar] live scan armed');
-})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
