@@ -5243,12 +5243,177 @@ body { padding-right: 0 !important; }
 
   console.log('[bridge] armed');
 })();
+</script><style id="live-vessels-map-css">
+#vessel-count-badge {
+  position: absolute; top: 12px; left: 60px; z-index: 500;
+  background: rgba(8,14,22,0.92); color: #00ff9d;
+  border: 1px solid rgba(0,255,157,0.45);
+  border-radius: 4px; padding: 6px 12px;
+  font-family: 'Share Tech Mono', monospace; font-size: 10px;
+  letter-spacing: 0.12em;
+  backdrop-filter: blur(10px);
+  text-shadow: 0 0 8px rgba(0,255,157,0.5);
+  pointer-events: none;
+}
+.vessel-popup .leaflet-popup-content-wrapper {
+  background: rgba(8,14,22,0.96) !important;
+  color: #c9d8ea !important;
+  border: 1px solid rgba(0,255,157,0.35) !important;
+  border-radius: 4px !important;
+  font-family: 'Share Tech Mono', monospace !important;
+  font-size: 11px !important;
+}
+.vessel-popup .leaflet-popup-tip {
+  background: rgba(8,14,22,0.96) !important;
+  border: 1px solid rgba(0,255,157,0.35) !important;
+}
+.vessel-popup .leaflet-popup-content { margin: 12px 14px !important; }
+.vessel-popup strong { color: #00ff9d; letter-spacing: 0.08em; }
+.vessel-popup .vrow { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.vessel-popup .vrow:last-child { border-bottom: 0; }
+.vessel-popup .vkey { color: #5c7286; }
+.vessel-popup .vval { color: #c9d8ea; font-family: 'Orbitron', monospace; }
+.leaflet-tooltip.vessel-tip {
+  background: rgba(8,14,22,0.95); color: #00ff9d;
+  border: 1px solid rgba(0,255,157,0.4);
+  font-family: 'Share Tech Mono', monospace; font-size: 10px;
+  letter-spacing: 0.06em;
+}
+</style>
+
+<script id="live-vessels-map">
+// Live vessel markers on the map — real AIS data from PocketWorld
+(function(){
+  var layer = null;
+  var countEl = null;
+  var lastFetch = 0;
+
+  function speedColor(sog){
+    var s = parseFloat(sog || 0);
+    if (s < 0.5) return { c:'#fbbf24', label:'stationary' };
+    if (s < 8)   return { c:'#00d4ff', label:'slow' };
+    if (s < 15)  return { c:'#00ff9d', label:'cruising' };
+    return { c:'#ff2e63', label:'fast' };
+  }
+
+  function makePopup(v){
+    var sc = speedColor(v.sog);
+    return '<strong>' + (v.name || ('MMSI ' + v.mmsi)) + '</strong>' +
+      '<div class="vrow"><span class="vkey">MMSI</span><span class="vval">' + (v.mmsi || '—') + '</span></div>' +
+      '<div class="vrow"><span class="vkey">Speed</span><span class="vval">' + (parseFloat(v.sog||0).toFixed(1)) + ' kt <span style="color:'+sc.c+';">('+sc.label+')</span></span></div>' +
+      '<div class="vrow"><span class="vkey">Course</span><span class="vval">' + Math.round(parseFloat(v.cog||v.heading||0)) + '°</span></div>' +
+      '<div class="vrow"><span class="vkey">Flag</span><span class="vval">' + (v.country || v.country_code || '—') + '</span></div>' +
+      '<div class="vrow"><span class="vkey">Type</span><span class="vval">' + (v.type_name || v.type || '—') + '</span></div>' +
+      '<div class="vrow"><span class="vkey">Lat / Lon</span><span class="vval">' + parseFloat(v.lat).toFixed(3) + ', ' + parseFloat(v.lng).toFixed(3) + '</span></div>';
+  }
+
+  function ensureLayer(map){
+    if (layer) return layer;
+    layer = L.layerGroup().addTo(map);
+    // Count badge
+    var container = map.getContainer();
+    if (container && !container.querySelector('#vessel-count-badge')){
+      countEl = document.createElement('div');
+      countEl.id = 'vessel-count-badge';
+      countEl.textContent = '◉ VESSELS ON MAP: --';
+      container.appendChild(countEl);
+    }
+    return layer;
+  }
+
+  function drawAOI(map){
+    if (window.__aoiDrawn) return;
+    // Bay of Bengal bounding box: 5-23°N, 78-95°E
+    var bounds = [[5, 78], [23, 95]];
+    L.rectangle(bounds, {
+      color: '#00ff9d', weight: 1.5, opacity: 0.6, dashArray: '6,6',
+      fillColor: '#00ff9d', fillOpacity: 0.03
+    }).addTo(map).bindTooltip('Bay of Bengal · AOI-1', { sticky: true });
+    window.__aoiDrawn = true;
+    console.log('[vessels] AOI rectangle drawn');
+  }
+
+  async function fetchAndPlot(){
+    var map = window.mapInstance || window._mapInstance;
+    if (!map) return false;
+
+    try {
+      var r = await fetch('https://pocketworld.org/api/ships');
+      if (!r.ok) { console.warn('[vessels] HTTP', r.status); return true; }
+      var d = await r.json();
+      var ships = d.ships || [];
+
+      // Filter to Bay of Bengal region
+      var regional = ships.filter(function(s){
+        var lat = parseFloat(s.lat);
+        var lon = parseFloat(s.lng);
+        return isFinite(lat) && isFinite(lon) && lat >= 5 && lat <= 23 && lon >= 78 && lon <= 95;
+      });
+
+      var use = regional.length > 20 ? regional : ships.filter(function(s){
+        var lat = parseFloat(s.lat), lon = parseFloat(s.lng);
+        return isFinite(lat) && isFinite(lon) && lat >= 0 && lat <= 30 && lon >= 70 && lon <= 100;
+      });
+
+      var lyr = ensureLayer(map);
+      lyr.clearLayers();
+
+      var plotted = 0;
+      use.forEach(function(v){
+        var lat = parseFloat(v.lat);
+        var lon = parseFloat(v.lng);
+        if (!isFinite(lat) || !isFinite(lon)) return;
+        var sc = speedColor(v.sog);
+        var m = L.circleMarker([lat, lon], {
+          radius: 4,
+          color: sc.c,
+          fillColor: sc.c,
+          fillOpacity: 0.85,
+          weight: 1,
+          opacity: 0.9
+        });
+        m.bindPopup(makePopup(v), { className: 'vessel-popup', maxWidth: 260 });
+        m.bindTooltip((v.name || v.mmsi) + ' · ' + parseFloat(v.sog||0).toFixed(1) + ' kt', { className: 'vessel-tip' });
+        lyr.addLayer(m);
+        plotted++;
+      });
+
+      if (countEl) countEl.textContent = '◉ VESSELS ON MAP: ' + plotted;
+      lastFetch = Date.now();
+      console.log('[vessels] plotted', plotted, 'of', ships.length, 'global ·', regional.length, 'regional');
+      return true;
+    } catch(e){
+      console.warn('[vessels] fetch failed:', e.message);
+      return true;
+    }
+  }
+
+  // Wait for map, draw AOI, start periodic refresh
+  var tries = 0;
+  var timer = setInterval(function(){
+    tries++;
+    var map = window.mapInstance || window._mapInstance;
+    if (map){
+      clearInterval(timer);
+      drawAOI(map);
+      fetchAndPlot();
+      setInterval(fetchAndPlot, 30000);
+      console.log('[vessels] live layer armed');
+    } else if (tries > 60){
+      clearInterval(timer);
+      console.warn('[vessels] map never appeared');
+    }
+  }, 500);
+
+  console.log('[vessels] armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
