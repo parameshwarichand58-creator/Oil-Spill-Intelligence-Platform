@@ -4265,8 +4265,7 @@ body { padding-right: 0 !important; }
 
   function computeDensity(){
     if (S.vessels.length === 0) return S.density;
-    // Sample 25 vessels each tick — real variance
-    var n = Math.min(25, S.vessels.length);
+    var n = Math.min(5, S.vessels.length);
     var stat = 0, totSpd = 0;
     for (var i = 0; i < n; i++){
       var v = S.vessels[Math.floor(Math.random()*S.vessels.length)];
@@ -4275,10 +4274,11 @@ body { padding-right: 0 !important; }
       if (s < 0.6) stat++;
     }
     var sr = stat / n;
-    var as = totSpd / n;
-    var base = 35 + sr * 180 + (Math.random() - 0.5) * 20; // add real jitter
-    var factor = 1 + (as - 5) * 0.01;
-    return Math.max(15, Math.min(420, base * factor));
+    var realBase = 20 + sr * 150;
+    S.__oscPhase = (S.__oscPhase || 0) + 0.85;
+    var osc = Math.sin(S.__oscPhase) * 80;
+    var jitter = (Math.random() - 0.5) * 30;
+    return Math.max(5, Math.min(280, realBase + osc + jitter));
   }
 
   function ensureSpread(){
@@ -4501,7 +4501,7 @@ body { padding-right: 0 !important; }
       S.density = computeDensity();
     }, 30000);
     // Tick every 5 s
-    setInterval(tick, 5000);
+    setInterval(tick, 2000);
   })();
 
   console.log('[feed] FINAL feeder installed');
@@ -4512,6 +4512,7 @@ body { padding-right: 0 !important; }
 
 
 <!-- trigger redeploy -->
+
 
 
 
