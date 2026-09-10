@@ -2225,12 +2225,13 @@ if (typeof toggleLiveSatellite === 'undefined') {
 
 <!-- force build $(Get-Date -Format 'yyyyMMddHHmmss') -->
 <script>
-// Real-time relay polling — live data from Render backend
+// Full dashboard live polling — relay + real weather
 (function(){
   var RELAY_URL = 'https://oil-spill-intelligence-platform.onrender.com';
   var densityHistory = [];
   var openIncident = null;
   var closedIncidents = [];
+  var lastUpdateSec = 0;
 
   function stats(arr){
     if (!arr.length) return { min:null, max:null, avg:null };
@@ -2241,6 +2242,33 @@ if (typeof toggleLiveSatellite === 'undefined') {
   function setTxt(id, val){ var el = document.getElementById(id); if (el) el.textContent = val; }
   function setHtml(id, html){ var el = document.getElementById(id); if (el) el.innerHTML = html; }
 
+  function threatLevelFor(density){
+    if (density >= 400) return { txt:'SEVERE', color:'#ff4757' };
+    if (density >= 150) return { txt:'HIGH', color:'#ff4757' };
+    if (density >= 50)  return { txt:'MODERATE', color:'#f59e0b' };
+    return { txt:'LOW', color:'#00d4aa' };
+  }
+
+  function updateThreat(density){
+    var t = threatLevelFor(density);
+    // Try common ID variations
+    ['tLevelBig','threatLevel','threatLevelValue','currentThreat'].forEach(function(id){
+      var el = document.getElementById(id);
+      if (el) { el.textContent = t.txt; el.style.color = t.color; }
+    });
+    // Also update any element whose text is exactly LOW/MODERATE/HIGH/SEVERE and is near "Current Threat Level"
+    var all = document.querySelectorAll('div,span,h2,h3');
+    for (var i=0; i<all.length; i++){
+      var el = all[i];
+      if (el.children.length === 0 && /^(LOW|MODERATE|HIGH|SEVERE)$/.test(el.textContent.trim())) {
+        if (el.style.fontSize && parseFloat(el.style.fontSize) > 16) {
+          el.textContent = t.txt;
+          el.style.color = t.color;
+        }
+      }
+    }
+  }
+
   async function pollHealth(){
     try {
       var r = await fetch(RELAY_URL + '/health');
@@ -2248,32 +2276,50 @@ if (typeof toggleLiveSatellite === 'undefined') {
       var density = typeof data.density === 'number' ? data.density : 0;
       var vessels = data.vessels || 0;
 
-      ['statShips','lsV'].forEach(function(id){
-        var el = document.getElementById(id);
-        if (el) el.textContent = vessels;
-      });
-
       densityHistory.push(density);
       if (densityHistory.length > 120) densityHistory.shift();
       var dStats = stats(densityHistory);
 
-      setTxt('lsD', density.toFixed(1));
+      var spread = 2.0 + (density / 100) * 2.0;
+      var conf = 82 + Math.min(15, density / 15);
+
+      // --- Ships counter everywhere ---
+      ['statShips','liveVessels'].forEach(function(id){
+        var el = document.getElementById(id);
+        if (el) el.textContent = vessels;
+      });
+
+      // --- Live Data Stream ---
+      setTxt('liveOilDensity', density.toFixed(1));
+      setTxt('liveSpreadRate', spread.toFixed(2));
+      setTxt('liveConfidence', conf.toFixed(1));
+
+      // --- AI Confidence meter ---
+      setTxt('confidenceMeter', conf.toFixed(0) + '%');
+      var bar = document.getElementById('confidenceBar');
+      if (bar) bar.style.width = conf.toFixed(0) + '%';
+
+      // --- Analysis page cards ---
       setHtml('anaDensity', density.toFixed(1) + '<span style="font-size:11px;color:#94a3b8;"> ug/L</span>');
       setTxt('anaDMin', dStats.min != null ? dStats.min.toFixed(1) : '—');
       setTxt('anaDMax', dStats.max != null ? dStats.max.toFixed(1) : '—');
       setTxt('anaDAvg', dStats.avg != null ? dStats.avg.toFixed(1) : '—');
 
-      var spread = 2.0 + (density / 100) * 2.0;
-      setTxt('lsS', spread.toFixed(2));
       setHtml('anaSpread', spread.toFixed(2) + '<span style="font-size:11px;color:#94a3b8;"> km/h</span>');
       setTxt('anaSMin', (spread - 0.5).toFixed(2));
       setTxt('anaSMax', (spread + 0.8).toFixed(2));
       setTxt('anaSAvg', spread.toFixed(2));
 
-      var conf = 82 + Math.min(15, density / 15);
       setHtml('anaAcc', conf.toFixed(1) + '<span style="font-size:11px;color:#94a3b8;"> %</span>');
-      setTxt('lsC', conf.toFixed(1));
 
+      // --- Threat level ---
+      updateThreat(density);
+
+      // --- Last update time ---
+      lastUpdateSec = 0;
+      setTxt('lastUpdate', 'Last update: just now');
+
+      // --- Incidents ---
       if (density >= 150 && !openIncident) {
         openIncident = { opened: Date.now(), peak: density };
       } else if (openIncident) {
@@ -2285,7 +2331,6 @@ if (typeof toggleLiveSatellite === 'undefined') {
           openIncident = null;
         }
       }
-
       var detections = closedIncidents.length + (openIncident ? 1 : 0);
       if (detections > 0) setHtml('anaMttd', detections + '<span style="font-size:11px;color:#94a3b8;"> events</span>');
 
@@ -2300,6 +2345,34 @@ if (typeof toggleLiveSatellite === 'undefined') {
 
       console.log('[relay] live:', vessels, 'vessels,', density.toFixed(1), 'ug/L');
     } catch(e) { console.warn('[relay] poll failed:', e.message); }
+  }
+
+  async function pollWeather(){
+    try {
+      // Open-Meteo — free, no key needed. Chennai: 13.08N, 80.27E
+      var r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=13.0827&longitude=80.2707&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code');
+      var d = await r.json();
+      var cur = d.current;
+      var temp = Math.round(cur.temperature_2m);
+      var hum  = Math.round(cur.relative_humidity_2m);
+      var wind = Math.round(cur.wind_speed_10m);
+      var code = cur.weather_code;
+      var icon = '☀️';
+      var desc = 'Clear';
+      if (code >= 1 && code <= 3) { icon = '🌤️'; desc = 'Partly cloudy'; }
+      else if (code >= 45 && code <= 48) { icon = '🌫️'; desc = 'Fog'; }
+      else if (code >= 51 && code <= 67) { icon = '🌧️'; desc = 'Rain'; }
+      else if (code >= 71 && code <= 77) { icon = '❄️'; desc = 'Snow'; }
+      else if (code >= 80 && code <= 82) { icon = '🌦️'; desc = 'Showers'; }
+      else if (code >= 95) { icon = '⛈️'; desc = 'Thunderstorm'; }
+
+      setTxt('weatherIcon', icon);
+      setTxt('weatherTemp', temp + '°C');
+      setTxt('weatherDesc', desc);
+      setTxt('weatherWind', wind);
+      setTxt('weatherHumidity', hum);
+      console.log('[weather] live:', temp + 'C,', desc, ',', wind + 'km/h,', hum + '%');
+    } catch(e) { console.warn('[weather] failed:', e.message); }
   }
 
   async function pollCerulean(){
@@ -2319,6 +2392,13 @@ if (typeof toggleLiveSatellite === 'undefined') {
     } catch(e) { console.warn('[cerulean] poll failed:', e.message); }
   }
 
+  // Counter ticking
+  setInterval(function(){
+    lastUpdateSec++;
+    setTxt('updateCounter', '⏳ ' + lastUpdateSec + 's');
+  }, 1000);
+
+  // Init ceru chart
   setTimeout(function(){
     var ceruCtx = document.getElementById('ceruChart');
     if (ceruCtx && !window._ceruChart && typeof Chart !== 'undefined') {
@@ -2346,9 +2426,12 @@ if (typeof toggleLiveSatellite === 'undefined') {
     }
   }, 1000);
 
+  // Start
   pollHealth();
+  pollWeather();
   pollCerulean();
   setInterval(pollHealth, 30000);
+  setInterval(pollWeather, 600000);
   setInterval(pollCerulean, 60000);
 })();
 </script></html>
@@ -2357,6 +2440,7 @@ if (typeof toggleLiveSatellite === 'undefined') {
 
 
 <!-- trigger redeploy -->
+
 
 
 
