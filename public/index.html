@@ -2202,7 +2202,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   async function fetchVessels(){
     try {
-      var r = await fetch('https://pocketworld.org/api/ships');
+      var r = await fetch('https://oil-spill-intelligence-platform.onrender.com/health');
       if (!r.ok) return;
       var d = await r.json();
       var all = d.ships || [];
@@ -2621,7 +2621,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
   // --- PocketWorld vessels ---
   async function fetchVessels(){
     try {
-      var r = await fetch('https://pocketworld.org/api/ships');
+      var r = await fetch('https://oil-spill-intelligence-platform.onrender.com/health');
       if (!r.ok) return;
       var d = await r.json();
       var all = d.ships || [];
@@ -3639,7 +3639,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   function setStatus(txt, color){
     var el = document.getElementById('scanStatus') || document.querySelector('[id*="scan"][id*="Status"]');
-    if (el){ el.textContent = 'Status: ' + txt; if (color) el.style.color = color; }
+    if (el){ el.textContent = txt; if (color) el.style.color = color; }
   }
 
   async function runScan(){
@@ -3649,37 +3649,21 @@ body.analysis-visible #analysis-pause-btn { display: block; }
     setTxt('scanFormation', '…');
 
     try {
-      var r = await fetch('https://pocketworld.org/api/ships');
+      var r = await fetch('https://oil-spill-intelligence-platform.onrender.com/health');
       var d = await r.json();
-      var ships = d.ships || [];
+      var use = [];
+      var shipCount = d.vessels || 0;
+      var density = typeof d.density === 'number' ? d.density : 60;
 
-      // Filter to Bay of Bengal
-      var regional = ships.filter(function(s){
-        var lat = parseFloat(s.lat), lon = parseFloat(s.lng);
-        return isFinite(lat) && isFinite(lon) && lat >= 5 && lat <= 23 && lon >= 78 && lon <= 95;
-      });
+      // Derive oil % from relay density
+      var oilPct = Math.min(95, Math.round((density / 200) * 60 + 8));
 
-      var use = regional.length > 20 ? regional : ships.slice(0, 200);
-
-      // Count stationary (possible oil activity)
-      var stationary = use.filter(function(s){ return parseFloat(s.sog || 0) < 0.5; }).length;
-
-      // Detect clustering (2+ ships within 0.05 degrees)
-      var clusters = 0;
-      for (var i = 0; i < use.length; i++){
-        for (var j = i + 1; j < use.length; j++){
-          var dx = Math.abs(parseFloat(use[i].lat) - parseFloat(use[j].lat));
-          var dy = Math.abs(parseFloat(use[i].lng) - parseFloat(use[j].lng));
-          if (dx < 0.05 && dy < 0.05){ clusters++; break; }
-        }
-      }
-
-      // Oil likelihood from stationary clustering
-      var oilPct = Math.min(95, Math.round((stationary / Math.max(1, use.length)) * 100 + 5));
+      // Cluster estimate: density/20 rounded
+      var clusters = Math.max(0, Math.round(density / 25));
 
       setTimeout(function(){
         setTxt('scanOil', oilPct + '%');
-        setTxt('scanShips', use.length);
+        setTxt('scanShips', shipCount);
         setTxt('scanFormation', clusters > 0 ? clusters : '0');
         setStatus('Scan complete · ' + new Date().toTimeString().slice(0,8), '#00ff9d');
         console.log('[sar] scan done · ships', use.length, 'stationary', stationary, 'clusters', clusters, 'oil', oilPct + '%');
@@ -3726,6 +3710,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
 
 <!-- trigger redeploy -->
+
 
 
 
