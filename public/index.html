@@ -3301,12 +3301,157 @@ input:focus,select:focus,textarea:focus{
   loop();
   console.log('[globe] active');
 })();
+</script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============ Earth Hero — injected at top of page1 ============
+(function(){
+  var HERO_HTML =
+    '<div class="card" style="display:grid;grid-template-columns:280px 1fr;gap:16px;padding:14px;margin-bottom:12px;">' +
+      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;border-right:1px solid rgba(0,255,157,0.08);padding-right:12px;">' +
+        '<div style="font-family:\'Share Tech Mono\',monospace;font-size:9px;color:#00ff9d;letter-spacing:0.2em;text-shadow:0 0 8px #00ff9d;margin-bottom:8px;">◉ EARTH · LIVE</div>' +
+        '<canvas id="earthCanvas" width="220" height="220"></canvas>' +
+      '</div>' +
+      '<div>' +
+        '<div class="card-title" style="margin-bottom:10px;"><i class="fas fa-satellite"></i> Mission Overview · Live Orbital Tracking</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">' +
+          '<div style="padding:10px 12px;background:rgba(0,255,157,0.04);border-left:3px solid #00ff9d;border-radius:3px;">' +
+            '<div style="font-family:\'Share Tech Mono\',monospace;font-size:9px;color:#5c7286;letter-spacing:0.14em;">🛰️ ISS · INTERNATIONAL SPACE STATION</div>' +
+            '<div style="font-family:\'Orbitron\',monospace;font-size:15px;color:#00ff9d;margin-top:5px;font-variant-numeric:tabular-nums;" id="issLat">--</div>' +
+            '<div style="font-family:\'Orbitron\',monospace;font-size:15px;color:#00d4ff;font-variant-numeric:tabular-nums;" id="issLon">--</div>' +
+            '<div style="font-size:9px;color:#64748b;margin-top:4px;font-family:\'Share Tech Mono\',monospace;">ALT <span id="issAlt">--</span> km · VEL <span id="issVel">--</span> km/h</div>' +
+          '</div>' +
+          '<div style="padding:10px 12px;background:rgba(74,158,255,0.04);border-left:3px solid #4a9eff;border-radius:3px;">' +
+            '<div style="font-family:\'Share Tech Mono\',monospace;font-size:9px;color:#5c7286;letter-spacing:0.14em;">🛰️ NASA MODIS · TERRA / AQUA</div>' +
+            '<div style="font-family:\'Orbitron\',monospace;font-size:15px;color:#4a9eff;margin-top:5px;">ONLINE</div>' +
+            '<div style="font-size:9px;color:#64748b;margin-top:4px;font-family:\'Share Tech Mono\',monospace;">True-color · 250 m res · daily revisit</div>' +
+          '</div>' +
+          '<div style="padding:10px 12px;background:rgba(255,153,51,0.04);border-left:3px solid #ff9933;border-radius:3px;">' +
+            '<div style="font-family:\'Share Tech Mono\',monospace;font-size:9px;color:#5c7286;letter-spacing:0.14em;">🛰️ ISRO RISAT · SAR CONSTELLATION</div>' +
+            '<div style="font-family:\'Orbitron\',monospace;font-size:15px;color:#ff9933;margin-top:5px;">ONLINE</div>' +
+            '<div style="font-size:9px;color:#64748b;margin-top:4px;font-family:\'Share Tech Mono\',monospace;">C-band SAR · cloud-penetrating</div>' +
+          '</div>' +
+          '<div style="padding:10px 12px;background:rgba(148,163,184,0.04);border-left:3px solid #94a3b8;border-radius:3px;">' +
+            '<div style="font-family:\'Share Tech Mono\',monospace;font-size:9px;color:#5c7286;letter-spacing:0.14em;">🛰️ SENTINEL-1 · CERULEAN FEED</div>' +
+            '<div style="font-family:\'Orbitron\',monospace;font-size:15px;color:#94a3b8;margin-top:5px;">ONLINE</div>' +
+            '<div style="font-size:9px;color:#64748b;margin-top:4px;font-family:\'Share Tech Mono\',monospace;">Slick detections · <span id="heroCeru">0</span> in AOI</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  function inject(){
+    var page1 = document.getElementById('page1');
+    if (!page1) return false;
+    if (document.getElementById('earthCanvas')) return true;
+    var wrap = document.createElement('div');
+    wrap.innerHTML = HERO_HTML;
+    page1.insertBefore(wrap.firstElementChild, page1.firstChild);
+    startGlobe();
+    startISS();
+    startCeruPoll();
+    return true;
+  }
+
+  var tries = 0;
+  var t = setInterval(function(){
+    tries++;
+    if (inject() || tries > 120) clearInterval(t);
+  }, 500);
+
+  // ---- Three.js globe ----
+  function startGlobe(){
+    var canvas = document.getElementById('earthCanvas');
+    if (!canvas || typeof THREE === 'undefined'){ console.warn('[globe] three.js missing'); return; }
+
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+    camera.position.z = 3.0;
+
+    var renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(220, 220, false);
+
+    var loader = new THREE.TextureLoader();
+    loader.crossOrigin = 'anonymous';
+    var tex = loader.load(
+      'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
+      function(){ console.log('[globe] texture loaded'); },
+      undefined,
+      function(){ console.warn('[globe] texture failed'); }
+    );
+
+    var earth = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 48, 48),
+      new THREE.MeshPhongMaterial({ map: tex, shininess: 8, specular: 0x1a2530 })
+    );
+    earth.rotation.z = -0.4;
+    scene.add(earth);
+
+    var atmo = new THREE.Mesh(
+      new THREE.SphereGeometry(1.05, 48, 48),
+      new THREE.MeshBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.12, side: THREE.BackSide })
+    );
+    scene.add(atmo);
+
+    var key = new THREE.DirectionalLight(0xffffff, 1.25);
+    key.position.set(5, 3, 4);
+    scene.add(key);
+    scene.add(new THREE.AmbientLight(0x1a2530, 1.3));
+
+    var paused = false;
+    document.addEventListener('visibilitychange', function(){ paused = document.hidden; });
+
+    function loop(){
+      requestAnimationFrame(loop);
+      if (paused) return;
+      earth.rotation.y += 0.0022;
+      renderer.render(scene, camera);
+    }
+    loop();
+    console.log('[globe] active');
+  }
+
+  // ---- ISS live position ----
+  function startISS(){
+    async function fetchISS(){
+      try{
+        var r = await fetch('https://api.wheretheiss.at/v1/satellites/25544');
+        var d = await r.json();
+        var latEl = document.getElementById('issLat');
+        var lonEl = document.getElementById('issLon');
+        var altEl = document.getElementById('issAlt');
+        var velEl = document.getElementById('issVel');
+        if (latEl) latEl.textContent = 'LAT ' + d.latitude.toFixed(2) + '\u00B0';
+        if (lonEl) lonEl.textContent = 'LON ' + d.longitude.toFixed(2) + '\u00B0';
+        if (altEl) altEl.textContent = d.altitude.toFixed(0);
+        if (velEl) velEl.textContent = d.velocity.toFixed(0);
+      }catch(e){ console.warn('[iss]', e.message); }
+    }
+    fetchISS();
+    setInterval(fetchISS, 5000);
+  }
+
+  // ---- Cerulean count ----
+  function startCeruPoll(){
+    async function fetchCeru(){
+      try{
+        var r = await fetch('https://oil-spill-intelligence-platform.onrender.com/api/cerulean');
+        var d = await r.json();
+        var el = document.getElementById('heroCeru');
+        if (el) el.textContent = (d.features || []).length;
+      }catch(e){}
+    }
+    fetchCeru();
+    setInterval(fetchCeru, 120000);
+  }
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 

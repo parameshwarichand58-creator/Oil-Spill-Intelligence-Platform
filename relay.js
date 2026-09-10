@@ -17,16 +17,9 @@ if (!VR_KEY) { console.error('VR_API_KEY missing'); process.exit(1); }
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/json');
-
   if (req.url === '/' || req.url === '/health') {
-    return res.end(JSON.stringify({
-      ok: true,
-      vessels: vessels.size,
-      density: lastDensity,
-      uptime: process.uptime()
-    }));
+    return res.end(JSON.stringify({ ok:true, vessels: vessels.size, density: lastDensity, uptime: process.uptime() }));
   }
-
   if (req.url.startsWith('/api/cerulean')) {
     try {
       const r = await fetch(`${CERULEAN_BASE}/collections/public.slick/items?bbox=78,10,88,20&limit=50`,
@@ -34,7 +27,6 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify(await r.json()));
     } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: e.message, features: [] })); }
   }
-
   res.statusCode = 404;
   res.end(JSON.stringify({ error: 'not found' }));
 });
@@ -54,8 +46,7 @@ async function pollVessels() {
       vessels.set(mmsi, {
         mmsi, name: p.name || `MMSI ${mmsi}`,
         lat: coords[1], lon: coords[0],
-        speed: parseFloat(p.sog || 0),
-        course: parseFloat(p.cog || 0),
+        speed: parseFloat(p.sog || 0), course: parseFloat(p.cog || 0),
         flag: p.flag || '', country: p.country || '',
         type: p.shipType || '', navStatus: p.navStatus || '',
         ts: Date.now()
@@ -68,15 +59,11 @@ async function pollVessels() {
   } catch (e) { console.error('[vr] error:', e.message); }
 }
 
-// Density broadcast — every 5s, real subsample of cached vessels
 function broadcastDensity() {
   if (vessels.size === 0) return;
   const all = [...vessels.values()];
-
-  // Random sample of 200 vessels (or all if fewer)
   const sampleSize = Math.min(200, all.length);
-  let stationary = 0;
-  let totalSpeed = 0;
+  let stationary = 0, totalSpeed = 0;
   for (let i = 0; i < sampleSize; i++) {
     const v = all[Math.floor(Math.random() * all.length)];
     const s = v.speed || 0;
@@ -85,37 +72,26 @@ function broadcastDensity() {
   }
   const stationaryRatio = stationary / sampleSize;
   const avgSpeed = totalSpeed / sampleSize;
-
-  // Real formula — stationary ratio is primary, avg speed shifts it slightly
   const base = 30 + stationaryRatio * 170;
-  const speedFactor = 1 + (avgSpeed - 6) * 0.008; // ±5% around avg speed of 6 kt
+  const speedFactor = 1 + (avgSpeed - 6) * 0.008;
   const density = Math.max(5, Math.min(420, base * speedFactor));
-
   lastDensity = density;
-
   broadcast({
-    type: 'density',
-    ts: Date.now(),
+    type: 'density', ts: Date.now(),
     oilDensity: density,
     spreadRate: 2.0 + (density / 100) * 2.0,
     confidence: 75 + Math.min(20, stationaryRatio * 25),
     vessels: vessels.size
   });
-
   console.log(`[density] ${density.toFixed(1)} ug/L (stationary ${stationary}/${sampleSize}, avg ${avgSpeed.toFixed(1)} kt)`);
 }
 
 const wss = new WebSocket.Server({ server, path: '/stream' });
-
 wss.on('connection', (client) => {
   console.log('[browser] connected');
   client.send(JSON.stringify({ type: 'snapshot', vessels: [...vessels.values()], ts: Date.now() }));
   if (lastDensity > 0) {
-    client.send(JSON.stringify({
-      type: 'density', ts: Date.now(),
-      oilDensity: lastDensity, spreadRate: 2.5, confidence: 80,
-      vessels: vessels.size
-    }));
+    client.send(JSON.stringify({ type: 'density', ts: Date.now(), oilDensity: lastDensity, spreadRate: 2.5, confidence: 80, vessels: vessels.size }));
   }
   client.on('close', () => console.log('[browser] disconnected'));
 });
