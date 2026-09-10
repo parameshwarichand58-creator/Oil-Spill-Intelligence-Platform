@@ -360,26 +360,27 @@
 
 <div class="main-content" id="mainContent">
     <!-- PAGE 1: DASHBOARD -->
-    <div class="page active" id="page1"><div id="dash-hero" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-  <div class="card" style="padding:10px;display:flex;flex-direction:column;align-items:center;">
-    <canvas id="heroEarthCanvas" width="220" height="220" style="width:100%;max-width:220px;height:auto;aspect-ratio:1/1;"></canvas>
-    <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#00ff9d;letter-spacing:0.16em;margin-top:6px;text-shadow:0 0 8px #00ff9d;">◉ EARTH · LIVE</div>
-  </div>
-  <div class="card" style="padding:10px;display:flex;flex-direction:column;">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
-      <div style="font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:0.14em;color:#94a3b8;">🛰 NASA MODIS · BAY OF BENGAL</div>
-      <div id="heroDate" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#5c7286;">--</div>
-    </div>
-    <img id="heroSat" src="" alt="NASA satellite" style="width:100%;height:180px;object-fit:cover;border-radius:3px;border:1px solid rgba(0,255,157,0.16);background:#000;"/>
-    <div style="display:flex;justify-content:space-between;margin-top:6px;font-family:'Share Tech Mono',monospace;font-size:8px;color:#5c7286;">
-      <span>TERRA · TRUE-COLOR · 250m</span>
-      <span id="heroDay">--</span>
-    </div>
-  </div>
-</div>
+    <div class="page active" id="page1">
         <div class="page-header">
             <h2>📊 <span class="highlight" id="page1Title">Mission Dashboard</span></h2>
             <p id="page1Sub">Real-time oil spill monitoring & intelligence</p>
+        </div>
+        <div id="dash-hero" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0;">
+            <div class="card" style="padding:10px;display:flex;flex-direction:column;align-items:center;">
+                <canvas id="heroEarthCanvas" width="220" height="220" style="width:100%;max-width:220px;height:auto;aspect-ratio:1/1;display:block;"></canvas>
+                <div style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#00ff9d;letter-spacing:0.16em;margin-top:6px;text-shadow:0 0 8px #00ff9d;">◉ EARTH · LIVE</div>
+            </div>
+            <div class="card" style="padding:10px;display:flex;flex-direction:column;">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+                    <div style="font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:0.14em;color:#94a3b8;">🛰 NASA MODIS · BAY OF BENGAL</div>
+                    <div id="heroDate" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#5c7286;">--</div>
+                </div>
+                <img id="heroSat" src="" alt="NASA satellite" style="width:100%;height:180px;object-fit:cover;border-radius:3px;border:1px solid rgba(0,255,157,0.16);background:#000;"/>
+                <div style="display:flex;justify-content:space-between;margin-top:6px;font-family:'Share Tech Mono',monospace;font-size:8px;color:#5c7286;">
+                    <span>TERRA · TRUE-COLOR · 250m</span>
+                    <span id="heroDay">--</span>
+                </div>
+            </div>
         </div>
         <div class="grid-5">
             <div class="card"><div class="stat-number">14</div><div class="stat-label" id="statShips">Ships</div></div>
@@ -3255,13 +3256,14 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[popups] A + B + C armed');
 })();
-</script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script id="dash-hero-script">
 (function(){
   if (window.__dashHero) return;
   window.__dashHero = true;
 
-  // --- Earth globe ---
+  // --- Earth: rotating 3D globe ---
   function bootEarth(){
     var c = document.getElementById('heroEarthCanvas');
     if (!c || typeof THREE === 'undefined'){ setTimeout(bootEarth, 400); return; }
@@ -3310,7 +3312,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
   }
   bootEarth();
 
-  // --- NASA MODIS satellite cycling ---
+  // --- NASA MODIS: cycling real daily captures ---
   var days = [];
   for (var i = 0; i < 8; i++){
     var d = new Date();
@@ -3318,6 +3320,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
     days.push(d.toISOString().slice(0,10));
   }
   var dayIdx = 0;
+  var validCache = null;
 
   function gibsUrl(date){
     return 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
@@ -3327,20 +3330,39 @@ body.analysis-visible #analysis-pause-btn { display: block; }
       '&CRS=EPSG:4326&BBOX=5,78,23,95&WIDTH=500&HEIGHT=300&TIME=' + date;
   }
 
+  function prefilterDates(cb){
+    var good = [];
+    var pending = days.length;
+    days.forEach(function(date){
+      fetch(gibsUrl(date)).then(function(r){ return r.blob(); }).then(function(b){
+        if (b.size > 5000) good.push(date);
+        pending--;
+        if (pending === 0){ cb(good.length > 0 ? good : days); }
+      }).catch(function(){
+        pending--;
+        if (pending === 0){ cb(good.length > 0 ? good : days); }
+      });
+    });
+  }
+
   function cycleSat(){
     var img = document.getElementById('heroSat');
-    if (!img) return;
-    var d = days[dayIdx];
+    if (!img || !validCache || !validCache.length) return;
+    var d = validCache[dayIdx % validCache.length];
     img.src = gibsUrl(d);
     var dateEl = document.getElementById('heroDate');
     var dayEl = document.getElementById('heroDay');
     if (dateEl) dateEl.textContent = d;
     if (dayEl) dayEl.textContent = 'DAY ' + (dayIdx === 0 ? 'T' : 'T-' + dayIdx);
-    dayIdx = (dayIdx + 1) % days.length;
-    console.log('[dash-hero] satellite →', d);
+    dayIdx = (dayIdx + 1) % validCache.length;
   }
-  cycleSat();
-  setInterval(cycleSat, 3000);
+
+  prefilterDates(function(list){
+    validCache = list;
+    console.log('[dash-hero] valid dates:', list.join(', '));
+    cycleSat();
+    setInterval(cycleSat, 3000);
+  });
 
   console.log('[dash-hero] armed');
 })();
@@ -3350,6 +3372,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
 
 <!-- trigger redeploy -->
+
 
 
 
