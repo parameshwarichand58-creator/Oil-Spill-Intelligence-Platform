@@ -3631,56 +3631,10 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 })();
 </script><script id="sar-scan">
 (function(){
-  if (window.__sarScan) return;
-  window.__sarScan = true;
+  if (window.__sarFinalV2) return;
+  window.__sarFinalV2 = true;
 
   function $(id){ return document.getElementById(id); }
-  function setStatus(t){
-    var e = $('scanStatus');
-    if (!e){
-      var all = document.querySelectorAll('*');
-      for (var i = 0; i < all.length; i++){
-        if (all[i].children.length === 0 && /^Status:/i.test((all[i].textContent||'').trim())){
-          e = all[i]; break;
-        }
-      }
-    }
-    if (e) e.textContent = t;
-  }
-
-  // Find a value element by its label text
-  function findByLabel(label){
-    var want = label.toLowerCase();
-    var all = document.querySelectorAll('div, span, p, td');
-    for (var i = 0; i < all.length; i++){
-      var el = all[i];
-      if (el.children.length > 0) continue;
-      var t = (el.textContent || '').trim().toLowerCase();
-      if (t !== want) continue;
-
-      // Found the label. Search in the parent AND grandparent for a value element
-      var containers = [el.parentElement];
-      if (el.parentElement && el.parentElement.parentElement){
-        containers.push(el.parentElement.parentElement);
-      }
-      for (var k = 0; k < containers.length; k++){
-        var parent = containers[k];
-        if (!parent) continue;
-        var kids = parent.querySelectorAll('*');
-        for (var j = 0; j < kids.length; j++){
-          var c = kids[j];
-          if (c === el) continue;
-          if (c.children.length > 0) continue;
-          var ct = (c.textContent || '').trim();
-          // Value: --, …, a number, or %/number combo. Skip ":" and label text
-          if (ct === '--' || ct === '…' || ct === '---') return c;
-          if (/^\d/.test(ct)) return c;
-          if (/^[\d.]+\s*(%|µg|km|km\/h)/.test(ct)) return c;
-        }
-      }
-    }
-    return null;
-  }
 
   function readDensity(){
     var ids = ['tick-density','liveOilDensity','anaDensity'];
@@ -3692,6 +3646,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
     }
     return 65;
   }
+
   function readShips(){
     var ids = ['tick-ships','statShips','liveVessels'];
     for (var i = 0; i < ids.length; i++){
@@ -3703,18 +3658,18 @@ body.analysis-visible #analysis-pause-btn { display: block; }
     return 0;
   }
 
-  function scan(){
-    setStatus('Scanning…');
+  window.runSatelliteScan = function(){
+    var statusEl = $('scanStatus');
+    var oilEl    = $('oilResult');
+    var shipsEl  = $('shipsResult');
+    var formEl   = $('formationResult');
 
-    // Find by label
-    var oilEl = findByLabel('Oil');
-    var shipsEl = findByLabel('Ships');
-    var formEl = findByLabel('Formation');
-    console.log('[sar] found els:', !!oilEl, !!shipsEl, !!formEl);
-
+    if (statusEl) statusEl.textContent = 'Scanning…';
     if (oilEl) oilEl.textContent = '…';
     if (shipsEl) shipsEl.textContent = '…';
     if (formEl) formEl.textContent = '…';
+
+    console.log('[sar] scan started');
 
     setTimeout(function(){
       var density = readDensity();
@@ -3728,8 +3683,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
       if (oilEl) oilEl.textContent = oilPct + '%';
       if (shipsEl) shipsEl.textContent = ships;
       if (formEl) formEl.textContent = clusters;
-
-      setStatus('Scan complete · ' + new Date().toTimeString().slice(0,8));
+      if (statusEl) statusEl.textContent = 'Scan complete · ' + new Date().toTimeString().slice(0,8);
 
       var el = $('analysisResult');
       if (el){
@@ -3754,41 +3708,39 @@ body.analysis-visible #analysis-pause-btn { display: block; }
           '</div>';
       }
 
-      console.log('[sar] density=' + density + ' oil=' + oilPct + '% ships=' + ships);
+      console.log('[sar] done | density=' + density + ' oil=' + oilPct + '% ships=' + ships + ' clusters=' + clusters);
     }, 1200);
-  }
+  };
 
-  function reset(){
-    var oilEl = findByLabel('Oil');
-    var shipsEl = findByLabel('Ships');
-    var formEl = findByLabel('Formation');
+  // Override reset if a reset button exists
+  window.resetSatelliteScan = function(){
+    var oilEl = $('oilResult');
+    var shipsEl = $('shipsResult');
+    var formEl = $('formationResult');
+    var statusEl = $('scanStatus');
     if (oilEl) oilEl.textContent = '--';
     if (shipsEl) shipsEl.textContent = '--';
     if (formEl) formEl.textContent = '--';
-    setStatus('Ready');
-  }
+    if (statusEl) statusEl.textContent = 'Ready';
+    var el = $('analysisResult');
+    if (el) el.innerHTML = '⏳ Waiting for scan...';
+  };
 
-  function wire(){
-    var found = 0;
+  // Wire the Reset button too
+  function wireReset(){
     document.querySelectorAll('button').forEach(function(b){
-      if (b.dataset.sarScan) return;
+      if (b.dataset.sarResetWired) return;
       var t = (b.textContent || '').trim().toLowerCase();
-      if (t.indexOf('start scan') >= 0){
-        b.dataset.sarScan = '1';
-        b.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); scan(); }, true);
-        found++;
-      }
       if (t === 'reset'){
-        b.dataset.sarScan = '1';
-        b.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); reset(); }, true);
-        found++;
+        b.dataset.sarResetWired = '1';
+        b.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); window.resetSatelliteScan(); }, true);
       }
     });
-    if (found) console.log('[sar] wired', found);
   }
-  wire();
-  setInterval(wire, 2000);
-  console.log('[sar] label-based scanner armed');
+  wireReset();
+  setInterval(wireReset, 2000);
+
+  console.log('[sar] ready — overriding runSatelliteScan');
 })();
 </script></html>
 
@@ -3796,6 +3748,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
 
 <!-- trigger redeploy -->
+
 
 
 
