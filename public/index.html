@@ -5189,12 +5189,67 @@ body { padding-right: 0 !important; }
     }
   });
 })();
+</script><script id="map-bridge">
+// Bridge: expose mapInstance as the global the enhancements expect + re-run them
+(function(){
+  function ensureGlobal(){
+    // If our fix created _mapInstance, mirror it to mapInstance
+    if (window._mapInstance && !window.mapInstance){
+      window.mapInstance = window._mapInstance;
+      console.log('[bridge] mapInstance exposed');
+      // Re-run enhancements
+      if (typeof L !== 'undefined' && L.heatLayer && !window.__heatAdded){
+        try {
+          var heatData = [
+            [22.41, 88.46, 0.8], [22.38, 88.44, 0.5], [22.40, 88.42, 0.6],
+            [22.35, 88.38, 0.4], [22.45, 88.52, 0.3]
+          ];
+          var heat = L.heatLayer(heatData, {
+            radius: 25, blur: 15, maxZoom: 17,
+            gradient: {0.4: 'blue', 0.6: 'yellow', 0.8: 'red'}
+          });
+          heat.addTo(window.mapInstance);
+          window.__heatAdded = true;
+          console.log('[bridge] heat layer added');
+        } catch(e){ console.warn('[bridge] heat failed:', e.message); }
+      }
+      if (typeof L !== 'undefined' && L.control && L.control.layers && !window.__layersAdded){
+        try {
+          var sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '&copy; ESRI' });
+          var street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OSM' });
+          L.control.layers({ 'Satellite': sat, 'Street': street }).addTo(window.mapInstance);
+          window.__layersAdded = true;
+          console.log('[bridge] layer switcher added');
+        } catch(e){ console.warn('[bridge] layers failed:', e.message); }
+      }
+      if (typeof L !== 'undefined' && L.control && L.control.fullscreen && !window.__fsAdded){
+        try {
+          L.control.fullscreen({ position: 'topleft' }).addTo(window.mapInstance);
+          window.__fsAdded = true;
+          console.log('[bridge] fullscreen added');
+        } catch(e){ console.warn('[bridge] fullscreen failed:', e.message); }
+      }
+      return true;
+    }
+    return false;
+  }
+
+  // Poll every 500 ms for up to 30 s
+  var tries = 0;
+  var t = setInterval(function(){
+    tries++;
+    if (ensureGlobal() || tries > 60) clearInterval(t);
+  }, 500);
+
+  console.log('[bridge] armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
