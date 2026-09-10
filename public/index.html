@@ -2907,12 +2907,345 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[live] analysis feeder armed');
 })();
+</script><style id="analysis-popups-css">
+/* A) Threshold alert popup */
+#alert-modal-bg {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 999998;
+  backdrop-filter: blur(4px);
+  align-items: center; justify-content: center;
+}
+#alert-modal-bg.show { display: flex; }
+#alert-modal {
+  max-width: 480px;
+  width: 90%;
+  background: linear-gradient(135deg, rgba(20,10,10,0.98), rgba(8,14,22,0.98));
+  border: 1px solid rgba(255,71,87,0.6);
+  border-left: 4px solid #ff4757;
+  border-radius: 6px;
+  padding: 22px 26px;
+  font-family: 'Share Tech Mono', monospace;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.7), 0 0 40px rgba(255,71,87,0.2);
+  animation: modalIn 0.3s ease;
+}
+@keyframes modalIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+#alert-modal .am-head {
+  font-family: 'Orbitron', monospace;
+  font-size: 16px;
+  color: #ff4757;
+  letter-spacing: 0.12em;
+  margin-bottom: 10px;
+  text-shadow: 0 0 12px rgba(255,71,87,0.6);
+}
+#alert-modal .am-body {
+  color: #c9d8ea;
+  font-size: 12px;
+  line-height: 1.7;
+  margin-bottom: 18px;
+}
+#alert-modal .am-body strong { color: #fff; }
+#alert-modal .am-actions {
+  display: flex; gap: 10px; justify-content: flex-end;
+}
+#alert-modal button {
+  padding: 8px 18px;
+  border-radius: 4px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+#alert-modal .am-dismiss {
+  background: rgba(255,71,87,0.15);
+  border: 1px solid rgba(255,71,87,0.5);
+  color: #ff4757;
+}
+#alert-modal .am-dismiss:hover {
+  background: rgba(255,71,87,0.3);
+  box-shadow: 0 0 16px rgba(255,71,87,0.4);
+}
+#alert-modal .am-ack {
+  background: rgba(0,255,157,0.1);
+  border: 1px solid rgba(0,255,157,0.45);
+  color: #00ff9d;
+}
+#alert-modal .am-ack:hover {
+  background: rgba(0,255,157,0.2);
+  box-shadow: 0 0 16px rgba(0,255,157,0.3);
+}
+
+/* B) Small toast in corner */
+.toast-notif {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  background: rgba(8,14,22,0.96);
+  border: 1px solid rgba(0,255,157,0.4);
+  border-left: 3px solid #00ff9d;
+  border-radius: 4px;
+  padding: 10px 16px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: #c9d8ea;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none;
+  z-index: 999997;
+  max-width: 320px;
+}
+.toast-notif.show { opacity: 1; transform: translateY(0); }
+.toast-notif.warn { border-color: rgba(251,191,36,0.5); border-left-color: #fbbf24; color: #fbbf24; }
+.toast-notif.bad { border-color: rgba(255,71,87,0.5); border-left-color: #ff4757; color: #ff4757; }
+.toast-notif .tn-time { color: #5c7286; font-size: 9px; margin-top: 3px; }
+
+/* C) Card detail popup */
+#card-detail-bg {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 999997;
+  backdrop-filter: blur(4px);
+  align-items: center; justify-content: center;
+}
+#card-detail-bg.show { display: flex; }
+#card-detail {
+  max-width: 440px;
+  width: 90%;
+  background: rgba(8,14,22,0.98);
+  border: 1px solid rgba(0,255,157,0.4);
+  border-left: 4px solid #00ff9d;
+  border-radius: 6px;
+  padding: 20px 24px;
+  font-family: 'Share Tech Mono', monospace;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.7), 0 0 30px rgba(0,255,157,0.15);
+  animation: modalIn 0.3s ease;
+}
+#card-detail .cd-title {
+  font-family: 'Orbitron', monospace;
+  font-size: 14px;
+  color: #00ff9d;
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+  text-shadow: 0 0 12px rgba(0,255,157,0.5);
+}
+#card-detail .cd-body {
+  color: #c9d8ea;
+  font-size: 11px;
+  line-height: 1.7;
+  margin-bottom: 18px;
+}
+#card-detail .cd-body strong { color: #00d4ff; }
+#card-detail button {
+  padding: 6px 16px;
+  border-radius: 4px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  background: rgba(0,255,157,0.1);
+  border: 1px solid rgba(0,255,157,0.4);
+  color: #00ff9d;
+  cursor: pointer;
+  letter-spacing: 0.08em;
+}
+#card-detail button:hover {
+  background: rgba(0,255,157,0.2);
+  box-shadow: 0 0 14px rgba(0,255,157,0.3);
+}
+
+/* Cursor pointer on analysis cards */
+#page5 .card { cursor: pointer; }
+#page5 .card:hover { border-color: rgba(0,255,157,0.35) !important; }
+</style>
+
+<div id="alert-modal-bg">
+  <div id="alert-modal">
+    <div class="am-head">🚨 OIL SPILL ALERT</div>
+    <div class="am-body" id="alert-modal-body">—</div>
+    <div class="am-actions">
+      <button class="am-dismiss" onclick="document.getElementById('alert-modal-bg').classList.remove('show')">DISMISS</button>
+      <button class="am-ack" onclick="document.getElementById('alert-modal-bg').classList.remove('show')">ACKNOWLEDGE</button>
+    </div>
+  </div>
+</div>
+
+<div id="card-detail-bg">
+  <div id="card-detail">
+    <div class="cd-title" id="card-detail-title">—</div>
+    <div class="cd-body" id="card-detail-body">—</div>
+    <div style="text-align:right;">
+      <button onclick="document.getElementById('card-detail-bg').classList.remove('show')">CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<script id="analysis-popups">
+(function(){
+  if (window.__analysisPopups) return;
+  window.__analysisPopups = true;
+
+  var lastLevel = null;
+  var lastToastAt = 0;
+
+  // ============================================
+  // A) Threshold crossing — big modal popup
+  // ============================================
+  function showAlertModal(level, density){
+    var bg = document.getElementById('alert-modal-bg');
+    var body = document.getElementById('alert-modal-body');
+    if (!bg || !body) return;
+
+    var recs = {
+      HIGH:     'Increase monitoring frequency. Cross-check AIS and notify coast guard standby.',
+      SEVERE:   'FULL RESPONSE. Notify coast guard, activate satellite SAR tasking immediately.'
+    };
+
+    body.innerHTML =
+      '<strong>Threat Level:</strong> ' + level + '<br>' +
+      '<strong>Oil Density:</strong> ' + density.toFixed(1) + ' µg/L<br>' +
+      '<strong>Region:</strong> Bay of Bengal · AOI-1<br>' +
+      '<strong>Time:</strong> ' + new Date().toTimeString().slice(0,8) + ' UTC<br><br>' +
+      '<em style="color:' + (level === 'SEVERE' ? '#ff4757' : '#fbbf24') + ';">' + recs[level] + '</em>';
+
+    bg.classList.add('show');
+    console.log('[popup] modal shown for', level);
+  }
+
+  // ============================================
+  // B) Small toast in corner
+  // ============================================
+  function showToast(msg, type){
+    var el = document.createElement('div');
+    el.className = 'toast-notif' + (type ? ' ' + type : '');
+    el.innerHTML = '<div>' + msg + '</div><div class="tn-time">' + new Date().toTimeString().slice(0,8) + '</div>';
+    document.body.appendChild(el);
+    setTimeout(function(){ el.classList.add('show'); }, 30);
+    setTimeout(function(){
+      el.classList.remove('show');
+      setTimeout(function(){ el.remove(); }, 400);
+    }, 3200);
+  }
+
+  // ============================================
+  // C) Card detail popup
+  // ============================================
+  var CARD_INFO = {
+    'Oil Spread Trend':       'Live density trend over the last 20 sample points. Green line = oil concentration in µg/L. Rising line suggests worsening conditions.',
+    'Spill Types':            'Real-time classification of detected hydrocarbons:<br><strong>Pink</strong> = Crude (≥400 µg/L)<br><strong>Amber</strong> = Diesel (150-399)<br><strong>Cyan</strong> = Bilge (50-149)<br><strong>Purple</strong> = Unknown (<50)',
+    'Monthly Comparison':     'Detections per month. The current month (green bar) updates live as new classifications are made.',
+    'Response Time':          'Mean time between incident detection and closure. Populates when a HIGH/SEVERE threat resolves back to MODERATE/LOW.',
+    'Oil Density — Rolling':  'Rolling statistics of oil density from the last 60 samples. Min/Max/Avg reveal the range and stability of current readings.',
+    'Spread Rate — Rolling':  'Computed spread velocity in km/h based on density trend and current. Higher spread rates indicate widening slicks.',
+    'Escalation Thresholds':  'Operational response bands. Cross-referenced against live density every 2 seconds to set the threat level.',
+    'Mission Intelligence':   'Status of each data source: NASA MODIS imagery, ISRO RISAT SAR, live AIS vessel feed, and the AI model version.'
+  };
+
+  function openCardDetail(title, value){
+    var bg = document.getElementById('card-detail-bg');
+    var tEl = document.getElementById('card-detail-title');
+    var bEl = document.getElementById('card-detail-body');
+    if (!bg || !tEl || !bEl) return;
+
+    tEl.textContent = title;
+
+    var info = CARD_INFO[title] || 'Live value: ' + (value || '—');
+    bEl.innerHTML =
+      (value ? '<div style="font-family:\'Orbitron\',monospace;font-size:18px;color:#fff;margin-bottom:10px;">' + value + '</div>' : '') +
+      info;
+
+    bg.classList.add('show');
+  }
+
+  // ============================================
+  // Watch density / threat for threshold crossing
+  // ============================================
+  function watchLevel(){
+    var p5 = document.getElementById('page5');
+    if (!p5 || !p5.classList.contains('active')) return;
+
+    var dEl = document.getElementById('lm-density') || document.getElementById('anaDensity');
+    if (!dEl) return;
+    var d = parseFloat((dEl.textContent || '0').replace(/[^0-9.]/g,'')) || 0;
+
+    var lvl = d >= 150 ? 'SEVERE' : d >= 100 ? 'HIGH' : d >= 50 ? 'MODERATE' : 'LOW';
+
+    if (lastLevel === null){ lastLevel = lvl; return; }
+    if (lvl === lastLevel) return;
+
+    // Level changed — decide on popup
+    var rank = { LOW:0, MODERATE:1, HIGH:2, SEVERE:3 };
+    var goingUp = rank[lvl] > rank[lastLevel];
+
+    if (goingUp && (lvl === 'HIGH' || lvl === 'SEVERE')){
+      // A) Big modal
+      showAlertModal(lvl, d);
+      // B) Also a toast
+      showToast('⚠ Threat escalated to ' + lvl, 'bad');
+    } else if (goingUp && lvl === 'MODERATE'){
+      // B) Just a toast for moderate
+      showToast('◉ Threat level: MODERATE · ' + d.toFixed(1) + ' µg/L', 'warn');
+    } else if (!goingUp){
+      // Coming down — subtle toast
+      var now = Date.now();
+      if (now - lastToastAt > 5000){
+        showToast('▼ Threat eased to ' + lvl + ' · ' + d.toFixed(1) + ' µg/L', '');
+        lastToastAt = now;
+      }
+    }
+
+    lastLevel = lvl;
+  }
+
+  // ============================================
+  // Card clicks → C) detail popup
+  // ============================================
+  function wireCards(){
+    var p5 = document.getElementById('page5');
+    if (!p5) return;
+    var cards = p5.querySelectorAll('.card');
+    cards.forEach(function(card){
+      if (card.dataset.popupWired) return;
+      card.dataset.popupWired = '1';
+
+      card.addEventListener('click', function(e){
+        // Don't trigger on buttons / links inside
+        if (e.target.closest('button') || e.target.closest('a')) return;
+        // Don't trigger on canvas (chart interaction)
+        if (e.target.tagName === 'CANVAS') return;
+
+        var titleEl = card.querySelector('.card-title');
+        if (!titleEl) return;
+        var title = titleEl.textContent.replace(/^[▸\s\u25B8]+/, '').replace(/[^\w\s—–·]/g,'').trim();
+        // Also try to read a value from the card
+        var valEl = card.querySelector('.kpi, [id^="ana"], .lm-val');
+        var value = valEl ? valEl.textContent.trim() : '';
+        openCardDetail(title, value);
+      });
+    });
+  }
+
+  // ============================================
+  // Boot
+  // ============================================
+  setInterval(watchLevel, 2000);
+  setInterval(wireCards, 2000);
+  wireCards();
+
+  console.log('[popups] A + B + C armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
