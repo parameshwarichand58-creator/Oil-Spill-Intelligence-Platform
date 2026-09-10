@@ -3649,24 +3649,27 @@ body.analysis-visible #analysis-pause-btn { display: block; }
     setTxt('scanFormation', '…');
 
     try {
-      var r = await fetch('https://oil-spill-intelligence-platform.onrender.com/health');
-      var d = await r.json();
-      var use = [];
-      var shipCount = d.vessels || 0;
-      var density = typeof d.density === 'number' ? d.density : 60;
+      // Read live values from the dashboard (already updated by ticker)
+      var shipsEl = document.getElementById('tick-ships') || document.getElementById('statShips');
+      var densEl = document.getElementById('tick-density') || document.getElementById('liveOilDensity');
+      var confEl = document.getElementById('tick-density'); // fallback
 
-      // Derive oil % from relay density
+      var shipCount = shipsEl ? parseInt((shipsEl.textContent||'0').replace(/[^0-9]/g,'')) || 0 : 0;
+      var density = densEl ? parseFloat((densEl.textContent||'0').replace(/[^0-9.]/g,'')) || 0 : 60;
+      if (density === 0) density = 60;
+
+      // Derive oil % from density
       var oilPct = Math.min(95, Math.round((density / 200) * 60 + 8));
 
-      // Cluster estimate: density/20 rounded
+      // Cluster estimate
       var clusters = Math.max(0, Math.round(density / 25));
 
       setTimeout(function(){
         setTxt('scanOil', oilPct + '%');
         setTxt('scanShips', shipCount);
-        setTxt('scanFormation', clusters > 0 ? clusters : '0');
+        setTxt('scanFormation', clusters);
         setStatus('Scan complete · ' + new Date().toTimeString().slice(0,8), '#00ff9d');
-        console.log('[sar] scan done · ships', use.length, 'stationary', stationary, 'clusters', clusters, 'oil', oilPct + '%');
+        console.log('[sar] scan done · ships', shipCount, 'density', density, 'clusters', clusters, 'oil', oilPct + '%');
       }, 1500);
     } catch(e){
       setStatus('Scan failed: ' + e.message, '#ff4757');
@@ -3710,6 +3713,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
 
 <!-- trigger redeploy -->
+
 
 
 
