@@ -4990,12 +4990,58 @@ body { padding-right: 0 !important; }
 
   console.log('[universal-buttons] wired — every button now gives feedback');
 })();
+</script><script id="nav-fix">
+// Fix sidebar navigation — direct click handler on every .nav-item
+(function(){
+  // Ensure showPage exists (restore if missing)
+  if (typeof window.showPage !== 'function'){
+    window.showPage = function(pageId){
+      document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+      var target = document.getElementById(pageId);
+      if (target) target.classList.add('active');
+      window.scrollTo(0,0);
+      console.log('[nav] showPage ->', pageId);
+    };
+    console.log('[nav] showPage restored');
+  }
+
+  function wire(){
+    var items = document.querySelectorAll('.nav-item');
+    if (items.length === 0){ setTimeout(wire, 500); return; }
+
+    items.forEach(function(item){
+      if (item.dataset.navWired) return;
+      item.dataset.navWired = '1';
+
+      item.addEventListener('click', function(e){
+        var onclick = item.getAttribute('onclick') || '';
+        var m = onclick.match(/showPage\(['"]([^'"]+)['"]\)/);
+        if (m){
+          e.preventDefault();
+          e.stopPropagation();
+          window.showPage(m[1]);
+          document.querySelectorAll('.nav-item').forEach(function(n){ n.classList.remove('active'); });
+          item.classList.add('active');
+        }
+      }, true);
+    });
+
+    console.log('[nav] wired', items.length, 'nav items');
+  }
+  wire();
+
+  // Re-wire if page structure changes
+  setInterval(wire, 2000);
+
+  console.log('[nav] fix armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
