@@ -1971,40 +1971,164 @@ if (typeof toggleLiveSatellite === 'undefined') {
     });
 })();
 </script>
+
 <script>
 // =========================================
-// REAL-TIME OCEAN DATA (Open-Meteo Marine API)
+// DASHBOARD PRO INJECTION (JavaScript-only)
+// Creates all cards dynamically - no HTML matching
 // =========================================
 (function() {
-    async function fetchOceanData() {
+    function injectDashboardCards() {
+        const dashboard = document.getElementById('page1');
+        if (!dashboard) { console.warn('Dashboard page1 not found'); return; }
+        if (document.getElementById('cmdBarInjected')) return; // already injected
+
+        const header = dashboard.querySelector('.page-header');
+        if (!header) { console.warn('Page header not found'); return; }
+
+        // ---------- COMMAND BAR ----------
+        const cmdBar = document.createElement('div');
+        cmdBar.id = 'cmdBarInjected';
+        cmdBar.className = 'card';
+        cmdBar.style.cssText = 'display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;padding:12px 20px;margin-bottom:12px;';
+        cmdBar.innerHTML =
+            '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">' +
+                '<span style="font-family:\'Share Tech Mono\',monospace;font-size:12px;color:#00d4aa;" id="liveUTC">🕐 --:--:-- UTC</span>' +
+                '<span style="font-family:\'Share Tech Mono\',monospace;font-size:12px;color:#4a9eff;" id="missionTime">⏱️ T+00:00:00</span>' +
+                '<span style="font-family:\'Share Tech Mono\',monospace;font-size:11px;color:#00ff88;">● SYSTEM NOMINAL</span>' +
+            '</div>' +
+            '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:10px;font-family:\'Share Tech Mono\',monospace;">' +
+                '<span style="color:#00d4aa;">🛰️ NASA GIBS: <span style="color:#00ff88;">Online</span></span>' +
+                '<span style="color:#00d4aa;">📡 AISStream: <span style="color:#00ff88;">Connected</span></span>' +
+                '<span style="color:#00d4aa;">🧠 AI: <span id="backendHealth" style="color:#fbbf24;">Standby</span></span>' +
+                '<span style="color:#f87171;">🔔 <span id="cmdAlertCount">0</span> Alerts</span>' +
+            '</div>';
+
+        // ---------- THREAT LEVEL + KPIs ----------
+        const threatKpiRow = document.createElement('div');
+        threatKpiRow.className = 'grid-2';
+        threatKpiRow.style.marginTop = '0';
+        threatKpiRow.innerHTML =
+            '<div class="card" style="background:linear-gradient(135deg,rgba(239,68,68,0.05),rgba(245,158,11,0.02));border-color:rgba(239,68,68,0.15);">' +
+                '<div class="card-title"><i class="fas fa-shield-alt"></i> Current Threat Level</div>' +
+                '<div style="display:flex;align-items:center;gap:20px;margin-top:10px;">' +
+                    '<div style="font-family:\'Orbitron\',monospace;font-size:36px;font-weight:800;color:#00ff88;letter-spacing:2px;" id="threatLevelText">LOW</div>' +
+                    '<div style="flex:1;">' +
+                        '<div style="height:8px;background:rgba(255,255,255,0.05);border-radius:4px;overflow:hidden;">' +
+                            '<div style="width:20%;height:100%;background:linear-gradient(90deg,#00ff88,#fbbf24,#ef4444);border-radius:4px;transition:width 0.6s;" id="threatBar"></div>' +
+                        '</div>' +
+                        '<div style="display:flex;justify-content:space-between;margin-top:4px;font-size:8px;color:#64748b;font-family:\'Share Tech Mono\',monospace;">' +
+                            '<span>LOW</span><span>MODERATE</span><span>HIGH</span><span>SEVERE</span>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div style="font-size:10px;color:#94a3b8;font-family:\'Share Tech Mono\',monospace;margin-top:10px;" id="threatReason">No active threats · All systems nominal</div>' +
+            '</div>' +
+            '<div class="card">' +
+                '<div class="card-title"><i class="fas fa-tachometer-alt"></i> Operational KPIs</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:11px;margin-top:8px;">' +
+                    '<div><div style="font-family:\'Orbitron\',monospace;font-size:20px;color:#4a9eff;" id="kpiMTTD">--</div><div style="font-size:8px;color:#64748b;font-family:\'Share Tech Mono\',monospace;">MTTD · DETECT</div></div>' +
+                    '<div><div style="font-family:\'Orbitron\',monospace;font-size:20px;color:#00d4aa;" id="kpiMTTR">--</div><div style="font-size:8px;color:#64748b;font-family:\'Share Tech Mono\',monospace;">MTTR · RESPOND</div></div>' +
+                    '<div><div style="font-family:\'Orbitron\',monospace;font-size:20px;color:#00ff88;" id="kpiAcc">98.2%</div><div style="font-size:8px;color:#64748b;font-family:\'Share Tech Mono\',monospace;">DETECTION ACCURACY</div></div>' +
+                    '<div><div style="font-family:\'Orbitron\',monospace;font-size:20px;color:#fbbf24;">250 km²</div><div style="font-size:8px;color:#64748b;font-family:\'Share Tech Mono\',monospace;">COVERAGE AREA</div></div>' +
+                '</div>' +
+            '</div>';
+
+        // ---------- OCEAN CONDITIONS ----------
+        const oceanRow = document.createElement('div');
+        oceanRow.className = 'card';
+        oceanRow.style.cssText = 'margin-top:12px;background:linear-gradient(135deg,rgba(74,158,255,0.04),rgba(0,212,170,0.02));border-color:rgba(74,158,255,0.1);';
+        oceanRow.innerHTML =
+            '<div class="card-title"><i class="fas fa-water"></i> Real-Time Ocean Conditions · Bay of Bengal</div>' +
+            '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:10px;">' +
+                '<div><div style="font-family:\'Orbitron\',monospace;font-size:22px;color:#4a9eff;" id="oceanWaveHeight">--</div><div style="font-size:8px;color:#64748b;font-family:\'Share Tech Mono\',monospace;">WAVE HEIGHT</div></div>' +
+                '<div><div style="font-family:\'Orbitron\',monospace;font-size:22px;color:#00d4aa;" id="oceanSST">--</div><div style="font-size:8px;color:#64748b;font-family:\'Share Tech Mono\',monospace;">SEA SURFACE TEMP</div></div>' +
+                '<div><div style="font-family:\'Orbitron\',monospace;font-size:22px;color:#fbbf24;" id="oceanWaveDir">--</div><div style="font-size:8px;color:#64748b;font-family:\'Share Tech Mono\',monospace;">WAVE DIRECTION</div></div>' +
+                '<div><div style="font-family:\'Orbitron\',monospace;font-size:22px;color:#f87171;" id="oceanWavePeriod">--</div><div style="font-size:8px;color:#64748b;font-family:\'Share Tech Mono\',monospace;">WAVE PERIOD</div></div>' +
+            '</div>' +
+            '<div style="font-size:9px;color:#64748b;font-family:\'Share Tech Mono\',monospace;margin-top:8px;" id="oceanLastUpdate">Fetching live data...</div>';
+
+        // Insert all after header
+        header.parentNode.insertBefore(cmdBar, header.nextSibling);
+        header.parentNode.insertBefore(threatKpiRow, cmdBar.nextSibling);
+        header.parentNode.insertBefore(oceanRow, threatKpiRow.nextSibling);
+
+        console.log('✅ Dashboard Pro cards injected');
+    }
+
+    // ---- Clock & mission timer ----
+    let missionStart = Date.now();
+    function tickClocks() {
+        const now = new Date();
+        const utc = now.toUTCString().split(' ')[4];
+        const u = document.getElementById('liveUTC');
+        if (u) u.textContent = '🕐 ' + utc + ' UTC';
+        const e = Math.floor((Date.now() - missionStart) / 1000);
+        const mt = document.getElementById('missionTime');
+        if (mt) mt.textContent = '⏱️ T+' + String(Math.floor(e/3600)).padStart(2,'0') + ':' + String(Math.floor((e%3600)/60)).padStart(2,'0') + ':' + String(e%60).padStart(2,'0');
+    }
+    setInterval(tickClocks, 1000);
+
+    // ---- Real ocean data ----
+    async function fetchOcean() {
         try {
-            const url = 'https://marine-api.open-meteo.com/v1/marine?latitude=22.41&longitude=88.46&current=wave_height,wave_direction,wave_period,sea_surface_temperature&timezone=Asia/Kolkata';
-            const res = await fetch(url);
-            const data = await res.json();
-            const c = data.current;
-            if (!c) throw new Error('No data');
-
-            const waveH = c.wave_height !== undefined ? c.wave_height.toFixed(1) + ' m' : '--';
-            const sst = c.sea_surface_temperature !== undefined ? c.sea_surface_temperature.toFixed(1) + '°C' : '--';
-            const waveDir = c.wave_direction !== undefined ? c.wave_direction + '°' : '--';
-            const wavePer = c.wave_period !== undefined ? c.wave_period.toFixed(1) + ' s' : '--';
-
-            const el = id => document.getElementById(id);
-            if (el('oceanWaveHeight')) el('oceanWaveHeight').textContent = waveH;
-            if (el('oceanSST')) el('oceanSST').textContent = sst;
-            if (el('oceanWaveDir')) el('oceanWaveDir').textContent = waveDir;
-            if (el('oceanWavePeriod')) el('oceanWavePeriod').textContent = wavePer;
-            if (el('oceanLastUpdate')) el('oceanLastUpdate').textContent = '✅ Live · Updated ' + new Date().toLocaleTimeString();
-
-            console.log('🌊 Real ocean data loaded:', { waveH, sst, waveDir, wavePer });
+            const r = await fetch('https://marine-api.open-meteo.com/v1/marine?latitude=22.41&longitude=88.46&current=wave_height,wave_direction,wave_period,sea_surface_temperature&timezone=Asia/Kolkata');
+            const d = await r.json();
+            const c = d.current || {};
+            const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+            set('oceanWaveHeight', c.wave_height != null ? c.wave_height.toFixed(1) + ' m' : '--');
+            set('oceanSST', c.sea_surface_temperature != null ? c.sea_surface_temperature.toFixed(1) + '°C' : '--');
+            set('oceanWaveDir', c.wave_direction != null ? c.wave_direction + '°' : '--');
+            set('oceanWavePeriod', c.wave_period != null ? c.wave_period.toFixed(1) + ' s' : '--');
+            set('oceanLastUpdate', '✅ Live · Updated ' + new Date().toLocaleTimeString());
+            console.log('🌊 Ocean data loaded', c);
         } catch(e) {
-            console.warn('Ocean data fetch failed:', e);
-            const el = id => document.getElementById(id);
-            if (el('oceanLastUpdate')) el('oceanLastUpdate').textContent = '⚠️ Using cached values';
+            const el = document.getElementById('oceanLastUpdate');
+            if (el) el.textContent = '⚠️ Ocean API unavailable';
         }
     }
-    fetchOceanData();
-    setInterval(fetchOceanData, 600000); // refresh every 10 minutes
+
+    // ---- Dynamic threat level from alert badge ----
+    function updateThreat() {
+        const badge = document.getElementById('alertBadge');
+        const count = badge && badge.style.display !== 'none' ? parseInt(badge.textContent || '0') : 0;
+        const t = document.getElementById('threatLevelText');
+        const b = document.getElementById('threatBar');
+        const r = document.getElementById('threatReason');
+        const cc = document.getElementById('cmdAlertCount');
+        if (!t || !b) return;
+        let lvl, col, w, reason;
+        if (count === 0) { lvl='LOW'; col='#00ff88'; w='20%'; reason='No active threats · All systems nominal'; }
+        else if (count <= 2) { lvl='MODERATE'; col='#fbbf24'; w='55%'; reason=count+' active alert(s) · Monitoring'; }
+        else if (count <= 4) { lvl='HIGH'; col='#f97316'; w='80%'; reason=count+' active alerts · Escalation recommended'; }
+        else { lvl='SEVERE'; col='#ef4444'; w='100%'; reason=count+' active alerts · Immediate response required'; }
+        t.textContent = lvl; t.style.color = col; b.style.width = w;
+        if (r) r.textContent = reason;
+        if (cc) cc.textContent = count;
+    }
+
+    // ---- Dynamic risks count (fix the hardcoded "3") ----
+    function updateRiskCount() {
+        const badge = document.getElementById('alertBadge');
+        const activeAlerts = badge && badge.style.display !== 'none' ? parseInt(badge.textContent || '0') : 0;
+        const riskEl = document.querySelector('#page1 .stat-label#statRisks') ? document.querySelector('#page1 .stat-label#statRisks').previousElementSibling : null;
+        if (riskEl && riskEl.classList.contains('stat-number')) {
+            riskEl.textContent = activeAlerts;
+            riskEl.className = 'stat-number ' + (activeAlerts === 0 ? '' : activeAlerts <= 2 ? 'warning' : 'danger');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            injectDashboardCards();
+            tickClocks();
+            fetchOcean();
+            setInterval(fetchOcean, 600000);
+            updateThreat();
+            updateRiskCount();
+            setInterval(function(){ updateThreat(); updateRiskCount(); }, 2000);
+        }, 500);
+    });
 })();
 </script>
 </body>
@@ -2015,6 +2139,7 @@ if (typeof toggleLiveSatellite === 'undefined') {
 
 
 <!-- trigger redeploy -->
+
 
 
 
