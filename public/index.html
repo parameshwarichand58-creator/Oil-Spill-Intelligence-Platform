@@ -4587,12 +4587,390 @@ body { padding-right: 0 !important; }
   text-align: center !important;
   margin-top: 6px !important;
 }
-</style></html>
+</style><script id="real-image-analysis">
+// Real image analysis — heuristic maritime threat detection
+(function(){
+  var lastResult = null;
+
+  function analyzePixels(img){
+    var c = document.createElement('canvas');
+    var maxDim = 300;
+    var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    c.width = Math.floor(img.width * scale);
+    c.height = Math.floor(img.height * scale);
+    var ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    var data = ctx.getImageData(0, 0, c.width, c.height).data;
+
+    var total = c.width * c.height;
+    var blue = 0, dark = 0, skin = 0, white = 0, orange = 0, black = 0;
+    var blueMap = new Uint8Array(total);
+    var darkMap = new Uint8Array(total);
+    var orangeMap = new Uint8Array(total);
+
+    for (var i = 0; i < data.length; i += 4){
+      var r = data[i], g = data[i+1], b = data[i+2];
+      var max = Math.max(r, g, b);
+      var min = Math.min(r, g, b);
+      var lum = (r * 0.299 + g * 0.587 + b * 0.114);
+      var px = i / 4;
+
+      // Blue / cyan (water)
+      if (b > 80 && b > r * 1.1 && b > g * 1.02 && lum > 30 && lum < 210){
+        blue++; blueMap[px] = 1;
+      }
+      // Dark (vessel hull, ship structures, oil)
+      if (lum < 70 && max < 110){
+        dark++; darkMap[px] = 1;
+        if (lum < 30) black++;
+      }
+      // Skin tone (selfie rejection)
+      if (r > 95 && g > 40 && b > 20 && r > g && r > b && (max - min) > 15 && Math.abs(r - g) > 15){
+        skin++;
+      }
+      // White (documents / clouds / ship superstructure)
+      if (lum > 220 && (max - min) < 30) white++;
+      // Orange / red (fire)
+      if (r > 180 && g > 60 && g < 180 && b < 100 && r > g * 1.3){
+        orange++; orangeMap[px] = 1;
+      }
+    }
+
+    return {
+      width: c.width,
+      height: c.height,
+      total: total,
+      blue, dark, skin, white, orange, black,
+      bluePct: blue / total,
+      darkPct: dark / total,
+      skinPct: skin / total,
+      whitePct: white / total,
+      orangePct: orange / total,
+      blueMap: blueMap,
+      darkMap: darkMap,
+      orangeMap: orangeMap,
+      data: data
+    };
+  }
+
+  // Cluster dark pixels into blobs (vessel candidates)
+  function findDarkBlobs(stats){
+    var w = stats.width, h = stats.height;
+    var visited = new Uint8Array(w * h);
+    var blobs = [];
+
+    function flood(sx, sy){
+      var stack = [[sx, sy]];
+      var pixels = [];
+      while (stack.length){
+        var p = stack.pop();
+        var x = p[0], y = p[1];
+        if (x < 0 || x >= w || y < 0 || y >= h) continue;
+        var idx = y * w + x;
+        if (visited[idx]) continue;
+        if (!stats.darkMap[idx]) continue;
+        visited[idx] = 1;
+        pixels.push([x, y]);
+        stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+      }
+      return pixels;
+    }
+
+    for (var y = 0; y < h; y++){
+      for (var x = 0; x < w; x++){
+        var idx = y * w + x;
+        if (stats.darkMap[idx] && !visited[idx]){
+          var pixels = flood(x, y);
+          if (pixels.length >= 40){ // minimum blob size
+            var minX = w, maxX = 0, minY = h, maxY = 0;
+            for (var i = 0; i < pixels.length; i++){
+              minX = Math.min(minX, pixels[i][0]);
+              maxX = Math.max(maxX, pixels[i][0]);
+              minY = Math.min(minY, pixels[i][1]);
+              maxY = Math.max(maxY, pixels[i][1]);
+            }
+            var bw = maxX - minX, bh = maxY - minY;
+            // Vessel shape: wider than tall usually (ships are elongated)
+            var aspect = bw / Math.max(1, bh);
+            var density = pixels.length / (bw * bh);
+            blobs.push({
+              cx: (minX + maxX) / 2,
+              cy: (minY + maxY) / 2,
+              w: bw, h: bh,
+              area: pixels.length,
+              aspect: aspect,
+              isVesselShape: aspect > 1.4 && density > 0.35
+            });
+          }
+        }
+      }
+    }
+
+    return blobs.filter(function(b){ return b.isVesselShape; }).sort(function(a,b){ return b.area - a.area; });
+  }
+
+  // Cluster blue pixels into water regions
+  function findWaterRegions(stats){
+    var w = stats.width, h = stats.height;
+    var visited = new Uint8Array(w * h);
+    var regions = [];
+
+    function flood(sx, sy){
+      var stack = [[sx, sy]];
+      var count = 0;
+      while (stack.length){
+        var p = stack.pop();
+        var x = p[0], y = p[1];
+        if (x < 0 || x >= w || y < 0 || y >= h) continue;
+        var idx = y * w + x;
+        if (visited[idx]) continue;
+        if (!stats.blueMap[idx]) continue;
+        visited[idx] = 1;
+        count++;
+        stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+      }
+      return count;
+    }
+
+    for (var y = 0; y < h; y++){
+      for (var x = 0; x < w; x++){
+        var idx = y * w + x;
+        if (stats.blueMap[idx] && !visited[idx]){
+          var n = flood(x, y);
+          if (n >= 500) regions.push(n);
+        }
+      }
+    }
+    return regions;
+  }
+
+  // Detect oil slick — dark patches surrounded by water
+  function detectOilSlick(stats){
+    var w = stats.width, h = stats.height;
+    var oilPixels = 0;
+    for (var y = 2; y < h - 2; y++){
+      for (var x = 2; x < w - 2; x++){
+        var idx = y * w + x;
+        if (!stats.darkMap[idx]) continue;
+        if (stats.black === 0) continue;
+        // Check 8 neighbours for water
+        var waterNeighbors = 0;
+        for (var dy = -2; dy <= 2; dy++){
+          for (var dx = -2; dx <= 2; dx++){
+            if (dx === 0 && dy === 0) continue;
+            var nx = x + dx, ny = y + dy;
+            if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+            if (stats.blueMap[ny * w + nx]) waterNeighbors++;
+          }
+        }
+        if (waterNeighbors >= 6) oilPixels++;
+      }
+    }
+    var ratio = oilPixels / stats.total;
+    return { detected: ratio > 0.008, coverage: ratio };
+  }
+
+  // Detect fire — dense orange cluster
+  function detectFire(stats){
+    var count = 0;
+    for (var i = 0; i < stats.orangeMap.length; i++) if (stats.orangeMap[i]) count++;
+    var ratio = count / stats.total;
+    return { detected: ratio > 0.003, coverage: ratio };
+  }
+
+  function classify(img, cb){
+    var stats = analyzePixels(img);
+    var waterPct = stats.bluePct;
+    var vesselBlobs = findDarkBlobs(stats);
+    var waterRegions = findWaterRegions(stats);
+    var oil = detectOilSlick(stats);
+    var fire = detectFire(stats);
+
+    // --- REJECTION CHECKS ---
+    // 1. Selfie: too much skin tone, no water
+    if (stats.skinPct > 0.18 && waterPct < 0.08){
+      return cb({ accepted:false, reason:'Person detected — no vessel or water in frame. Not a maritime incident.' });
+    }
+    // 2. Document: mostly white with dark text
+    if (stats.whitePct > 0.55 && stats.bluePct < 0.05 && stats.darkPct < 0.12){
+      return cb({ accepted:false, reason:'Document or text image — no maritime content detected.' });
+    }
+    // 3. No water at all
+    if (waterPct < 0.12 && waterRegions.length === 0){
+      return cb({ accepted:false, reason:'No water body detected — image does not appear to be a maritime scene.' });
+    }
+    // 4. Water found but no vessel-shaped blob
+    if (vesselBlobs.length === 0 && !oil.detected){
+      return cb({ accepted:false, reason:'Water detected but no vessel or oil slick identified.' });
+    }
+
+    // --- ACCEPTED — run threat analysis ---
+    var threats = [];
+
+    if (oil.detected){
+      threats.push({
+        type:'OIL SPILL',
+        severity: oil.coverage > 0.03 ? 'HIGH' : 'MODERATE',
+        detail: 'Dark patch on water surface — likely hydrocarbon slick. Coverage ' + (oil.coverage * 100).toFixed(1) + '% of frame.'
+      });
+    }
+    if (fire.detected){
+      threats.push({
+        type:'FIRE / THERMAL ANOMALY',
+        severity: fire.coverage > 0.015 ? 'HIGH' : 'MODERATE',
+        detail: 'Saturated orange-red region detected — possible fire, flare, or hot exhaust. Coverage ' + (fire.coverage * 100).toFixed(2) + '%.'
+      });
+    }
+
+    // Collision / proximity check — two vessels close
+    if (vesselBlobs.length >= 2){
+      for (var i = 0; i < vesselBlobs.length; i++){
+        for (var j = i + 1; j < vesselBlobs.length; j++){
+          var a = vesselBlobs[i], b = vesselBlobs[j];
+          var dist = Math.sqrt(Math.pow(a.cx - b.cx, 2) + Math.pow(a.cy - b.cy, 2));
+          var sizeRatio = Math.max(a.area, b.area) / Math.min(a.area, b.area);
+          if (dist < 40 && sizeRatio > 3){
+            threats.push({
+              type:'SUSPICIOUS APPROACH',
+              severity:'HIGH',
+              detail:'Small vessel within ' + Math.round(dist) + 'px of large vessel — possible transfer or boarding scenario.'
+            });
+          } else if (dist < 25){
+            threats.push({
+              type:'COLLISION RISK',
+              severity:'HIGH',
+              detail:'Two vessels within ' + Math.round(dist) + 'px — potential collision or contact.'
+            });
+          }
+        }
+      }
+    }
+
+    // Natural spill check — oil without nearby vessel (already spilled and vessel left)
+    if (oil.detected && vesselBlobs.length === 0){
+      threats.push({
+        type:'NATURAL / ORPHAN SPILL',
+        severity:'MODERATE',
+        detail:'Oil slick detected with no vessel in frame — likely old spill or natural seep.'
+      });
+    }
+
+    cb({
+      accepted: true,
+      waterPct: waterPct,
+      vesselCount: vesselBlobs.length,
+      oil: oil,
+      fire: fire,
+      threats: threats,
+      vessels: vesselBlobs.slice(0, 5).map(function(b){
+        return { cx: Math.round(b.cx), cy: Math.round(b.cy), area: b.area };
+      })
+    });
+  }
+
+  // --- Wire into the Analyze button ---
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest('#analyzeBtn, button');
+    if (!btn) return;
+    var txt = (btn.textContent || '').trim();
+    if (!/analyze/i.test(txt)) return;
+
+    var input = document.getElementById('imageInput');
+    if (!input || !input.files || !input.files[0]){
+      // fall back to preview img on page
+      var preview = document.querySelector('#page7 img, #analysisResult img');
+      if (!preview) return;
+      runAnalysis(preview);
+      return;
+    }
+    var file = input.files[0];
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      var img = new Image();
+      img.onload = function(){ runAnalysis(img); };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  function runAnalysis(img){
+    var resultEl = document.getElementById('analysisResult');
+    if (resultEl){
+      resultEl.innerHTML = '<span style="color:#00d4ff;">◉ Analyzing image... (water · vessels · oil · fire)</span>';
+      resultEl.style.color = '#c9d8ea';
+      resultEl.style.display = 'block';
+    }
+    setTimeout(function(){
+      classify(img, function(r){
+        renderResult(r, resultEl);
+        lastResult = r;
+      });
+    }, 400);
+  }
+
+  function renderResult(r, el){
+    if (!el) return;
+    el.style.display = 'block';
+    el.style.padding = '14px 18px';
+    el.style.borderRadius = '4px';
+    el.style.fontFamily = "'Share Tech Mono', monospace";
+    el.style.fontSize = '12px';
+
+    if (!r.accepted){
+      el.style.background = 'rgba(255, 71, 87, 0.08)';
+      el.style.border = '1px solid rgba(255, 71, 87, 0.4)';
+      el.style.borderLeft = '3px solid #ff4757';
+      el.style.color = '#ff4757';
+      el.innerHTML =
+        '<div style="letter-spacing:0.12em;font-size:11px;margin-bottom:6px;">⚠ IMAGE REJECTED</div>' +
+        '<div style="color:#c9d8ea;line-height:1.6;">' + r.reason + '</div>';
+      return;
+    }
+
+    // Accepted — build result
+    var threatHtml = '';
+    if (r.threats.length === 0){
+      el.style.background = 'rgba(0,255,157,0.06)';
+      el.style.border = '1px solid rgba(0,255,157,0.35)';
+      el.style.borderLeft = '3px solid #00ff9d';
+      threatHtml =
+        '<div style="color:#00ff9d;letter-spacing:0.12em;font-size:11px;margin-bottom:8px;">✓ MARITIME SCENE · NO THREATS DETECTED</div>' +
+        '<div style="color:#c9d8ea;line-height:1.6;font-size:11px;">' +
+          'Water coverage: ' + (r.waterPct * 100).toFixed(1) + '% · ' +
+          'Vessels detected: ' + r.vesselCount + '<br>' +
+          'No oil slick, fire, or proximity anomaly identified.' +
+        '</div>';
+    } else {
+      el.style.background = 'rgba(255, 71, 87, 0.08)';
+      el.style.border = '1px solid rgba(255, 71, 87, 0.4)';
+      el.style.borderLeft = '3px solid #ff4757';
+      threatHtml =
+        '<div style="color:#ff4757;letter-spacing:0.12em;font-size:11px;margin-bottom:8px;">⚠ ' + r.threats.length + ' THREAT' + (r.threats.length > 1 ? 'S' : '') + ' DETECTED</div>' +
+        r.threats.map(function(t){
+          var sev = t.severity === 'HIGH' ? '#ff4757' : t.severity === 'MODERATE' ? '#fbbf24' : '#00d4ff';
+          return '<div style="margin-bottom:8px;padding-left:10px;border-left:2px solid ' + sev + ';">' +
+            '<div style="color:' + sev + ';font-size:11px;letter-spacing:0.08em;">' + t.type + ' · ' + t.severity + '</div>' +
+            '<div style="color:#c9d8ea;font-size:11px;line-height:1.5;margin-top:3px;">' + t.detail + '</div>' +
+          '</div>';
+        }).join('') +
+        '<div style="color:#5c7286;font-size:9px;margin-top:8px;letter-spacing:0.08em;">' +
+          'Water ' + (r.waterPct * 100).toFixed(1) + '% · Vessels ' + r.vesselCount +
+        '</div>';
+    }
+    el.innerHTML = threatHtml;
+
+    console.log('[image-analysis]', r);
+  }
+
+  console.log('[image-analysis] real detector armed');
+})();
+</script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
