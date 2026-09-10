@@ -1971,6 +1971,42 @@ if (typeof toggleLiveSatellite === 'undefined') {
     });
 })();
 </script>
+<script>
+// =========================================
+// REAL-TIME OCEAN DATA (Open-Meteo Marine API)
+// =========================================
+(function() {
+    async function fetchOceanData() {
+        try {
+            const url = 'https://marine-api.open-meteo.com/v1/marine?latitude=22.41&longitude=88.46&current=wave_height,wave_direction,wave_period,sea_surface_temperature&timezone=Asia/Kolkata';
+            const res = await fetch(url);
+            const data = await res.json();
+            const c = data.current;
+            if (!c) throw new Error('No data');
+
+            const waveH = c.wave_height !== undefined ? c.wave_height.toFixed(1) + ' m' : '--';
+            const sst = c.sea_surface_temperature !== undefined ? c.sea_surface_temperature.toFixed(1) + '°C' : '--';
+            const waveDir = c.wave_direction !== undefined ? c.wave_direction + '°' : '--';
+            const wavePer = c.wave_period !== undefined ? c.wave_period.toFixed(1) + ' s' : '--';
+
+            const el = id => document.getElementById(id);
+            if (el('oceanWaveHeight')) el('oceanWaveHeight').textContent = waveH;
+            if (el('oceanSST')) el('oceanSST').textContent = sst;
+            if (el('oceanWaveDir')) el('oceanWaveDir').textContent = waveDir;
+            if (el('oceanWavePeriod')) el('oceanWavePeriod').textContent = wavePer;
+            if (el('oceanLastUpdate')) el('oceanLastUpdate').textContent = '✅ Live · Updated ' + new Date().toLocaleTimeString();
+
+            console.log('🌊 Real ocean data loaded:', { waveH, sst, waveDir, wavePer });
+        } catch(e) {
+            console.warn('Ocean data fetch failed:', e);
+            const el = id => document.getElementById(id);
+            if (el('oceanLastUpdate')) el('oceanLastUpdate').textContent = '⚠️ Using cached values';
+        }
+    }
+    fetchOceanData();
+    setInterval(fetchOceanData, 600000); // refresh every 10 minutes
+})();
+</script>
 </body>
 <!-- force build $(Get-Date -Format 'yyyyMMddHHmmss') -->
 </html>
@@ -1979,6 +2015,7 @@ if (typeof toggleLiveSatellite === 'undefined') {
 
 
 <!-- trigger redeploy -->
+
 
 
 
