@@ -5088,12 +5088,114 @@ body { padding-right: 0 !important; }
 
   console.log('[kn] fix armed');
 })();
+</script><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" id="map-fix-css"/>
+<style id="map-fix">
+#map, #leaflet-map, .leaflet-container, [id*="map"] {
+  min-height: 460px !important;
+  height: 460px !important;
+  width: 100% !important;
+  background: #0a1420 !important;
+  border-radius: 4px;
+}
+.leaflet-container {
+  background: #0a1420 !important;
+  font-family: 'Share Tech Mono', monospace !important;
+}
+.leaflet-tile {
+  filter: brightness(0.85) contrast(1.1) saturate(0.9);
+}
+.leaflet-control-attribution {
+  background: rgba(8,14,22,0.8) !important;
+  color: #5c7286 !important;
+  font-size: 9px !important;
+}
+.leaflet-bar a {
+  background: #0a1420 !important;
+  color: #00ff9d !important;
+  border-color: rgba(0,255,157,0.25) !important;
+}
+</style>
+
+<script id="map-fix">
+// Ensure Leaflet map initializes correctly
+(function(){
+  function initMap(){
+    if (typeof L === 'undefined'){ setTimeout(initMap, 400); return; }
+
+    // Find the map container
+    var el = document.getElementById('map') ||
+             document.getElementById('leaflet-map') ||
+             document.querySelector('.leaflet-container') ||
+             document.querySelector('[id*="map"]:not([id*="sitemap"])');
+    if (!el){
+      setTimeout(initMap, 800);
+      return;
+    }
+
+    // If already initialized, just invalidate size
+    if (el._leaflet_id){
+      if (window._mapInstance && typeof window._mapInstance.invalidateSize === 'function'){
+        window._mapInstance.invalidateSize();
+      }
+      return;
+    }
+
+    // Force dimensions
+    el.style.minHeight = '460px';
+    el.style.height = '460px';
+    el.style.width = '100%';
+
+    // Init the map
+    try {
+      var map = L.map(el, {
+        center: [13.08, 80.27],     // Bay of Bengal / Chennai
+        zoom: 5,
+        zoomControl: true
+      });
+
+      // Dark tiles
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 19
+      }).addTo(map);
+
+      window._mapInstance = map;
+
+      // Add a Bay of Bengal marker as a sanity check
+      L.circleMarker([13.08, 80.27], {
+        radius: 6,
+        color: '#00ff9d',
+        fillColor: '#00ff9d',
+        fillOpacity: 0.8
+      }).addTo(map).bindPopup('Bay of Bengal · AOI-1');
+
+      setTimeout(function(){ map.invalidateSize(); }, 400);
+      console.log('[map] initialized');
+    } catch(e){
+      console.warn('[map] init error:', e.message);
+    }
+  }
+  setTimeout(initMap, 800);
+
+  // Force redraw when Map page becomes visible
+  document.addEventListener('click', function(e){
+    var item = e.target.closest('.nav-item');
+    if (!item) return;
+    if (/map/i.test(item.textContent)){
+      setTimeout(function(){
+        if (window._mapInstance) window._mapInstance.invalidateSize();
+      }, 400);
+    }
+  });
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
