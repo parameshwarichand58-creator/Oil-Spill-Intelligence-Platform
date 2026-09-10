@@ -2823,12 +2823,55 @@ input:focus,select:focus,textarea:focus{
   setInterval(marine,600000);
   setInterval(ceru,120000);
 })();
+</script><script>
+// Safe ocean panel updater — additive only, touches nothing else
+(function(){
+  async function updateOcean(){
+    try{
+      var r = await fetch('https://marine-api.open-meteo.com/v1/marine?latitude=13.0827&longitude=80.2707&current=wave_height,wave_direction,wave_period,sea_surface_temperature');
+      var d = await r.json();
+      if (!d.current) return;
+      var wh  = (d.current.wave_height||0).toFixed(1);
+      var wd  = Math.round(d.current.wave_direction||0);
+      var wp  = (d.current.wave_period||0).toFixed(1);
+      var sst = (d.current.sea_surface_temperature||0).toFixed(1);
+
+      // Write by ID (dashboard card)
+      var el1 = document.getElementById('oceanWaveHeight');
+      var el2 = document.getElementById('oceanSST');
+      var el3 = document.getElementById('oceanWaveDir');
+      var el4 = document.getElementById('oceanWavePeriod');
+      if (el1) el1.textContent = wh + ' m';
+      if (el2) el2.textContent = sst + '\u00B0C';
+      if (el3) el3.textContent = wd + '\u00B0';
+      if (el4) el4.textContent = wp + ' s';
+
+      // Fallback: find by label text
+      var all = document.querySelectorAll('*');
+      for (var i=0;i<all.length;i++){
+        var el = all[i];
+        if (el.children.length > 0) continue;
+        var t = (el.textContent||'').trim();
+        var prev = el.previousElementSibling;
+        if (!prev) continue;
+        if (t === 'WAVE HEIGHT')     prev.textContent = wh + ' m';
+        if (t === 'SEA SURFACE TEMP') prev.textContent = sst + '\u00B0C';
+        if (t === 'WAVE DIRECTION')  prev.textContent = wd + '\u00B0';
+        if (t === 'WAVE PERIOD')     prev.textContent = wp + ' s';
+      }
+      console.log('[ocean]', wh, sst, wd, wp);
+    }catch(e){ console.warn('[ocean]', e.message); }
+  }
+  updateOcean();
+  setInterval(updateOcean, 600000);
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
