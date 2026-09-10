@@ -568,9 +568,6 @@
             <div style="font-family:'Orbitron',monospace;font-size:18px;font-weight:700;color:#4a9eff;margin-bottom:5px;" id="alertStatusText">System Ready</div>
             <div style="color:#94a3b8;font-size:12px;font-family:'Share Tech Mono',monospace;" id="alertMessageText">Awaiting command</div>
             <div class="btn-group" style="margin-top:15px;">
-                <button class="btn btn-danger" onclick="triggerNaturalAlert()"><i class="fas fa-water"></i> <span id="btnNatural">Natural Spill</span></button>
-                <button class="btn btn-danger" onclick="triggerCulpritAlert()"><i class="fas fa-ship"></i> <span id="btnCulprit">Culprit Theft</span></button>
-                <button class="btn btn-danger" onclick="triggerInternalAlert()"><i class="fas fa-exclamation-triangle"></i> <span id="btnInternal">Internal Failure</span></button>
                 <button class="btn btn-danger" onclick="triggerCollisionAlert()"><i class="fas fa-car-crash"></i> <span>Collision</span></button>
                 <button class="btn btn-danger" onclick="triggerFireAlert()"><i class="fas fa-fire"></i> <span>Fire</span></button>
                 <button class="btn btn-danger" onclick="triggerWeatherAlert()"><i class="fas fa-cloud-rain"></i> <span>Weather</span></button>
@@ -1370,75 +1367,7 @@ function triggerAlertFromMap() {
     showPage('page4');
 }
 
-function triggerNaturalAlert() { startAlert('Natural oil seepage detected. No vessel involved. Take environmental action.', 'NATURAL SEEPAGE', '🌊 Natural seepage - No vessel'); }
-function triggerCulpritAlert() { startAlert('Oil spill detected! Cargo Gamma attempted illegal oil theft! Take immediate action!', 'OIL SPILL DETECTED', '🛳️ Culprit: Cargo Gamma · IMO: 7654321'); }
-function triggerInternalAlert() { startAlert('Internal failure on Cargo Gamma. Mechanical pipe burst! Take immediate action!', 'INTERNAL FAILURE', '⚙️ Ship: Cargo Gamma · IMO: 7654321'); }
-function triggerCollisionAlert() { startAlert('Collision detected between two vessels! Oil spill spreading.', 'COLLISION SPILL', '💥 Vessels: Tanker Alpha & Unknown'); }
-function triggerFireAlert() { startAlert('Fire and explosion on oil rig! Emergency response needed.', 'FIRE/EXPLOSION', '🔥 Oil rig: Platform 7'); }
-function triggerWeatherAlert() { startAlert('Storm caused oil release! Containment required.', 'WEATHER SPILL', '🌀 Tropical storm warning'); }
-
-// =========================================
-// SATELLITE SCANNER
-// =========================================
-let isScanning = false;
-
-function runSatelliteScan() {
-    if(isScanning) return;
-    isScanning = true;
-    document.getElementById('scanLine').classList.add('active');
-    document.getElementById('scanLabel').textContent = '🔄 Scanning...';
-    document.getElementById('scanStatus').textContent = 'Scanning...';
-    document.getElementById('scanStatus').style.color = '#fbbf24';
-    document.getElementById('oilResult').textContent = '--';
-    document.getElementById('oilResult').style.color = '#64748b';
-    document.getElementById('shipsResult').textContent = '--';
-    document.getElementById('shipsResult').style.color = '#64748b';
-    document.getElementById('formationResult').textContent = '--';
-    document.getElementById('formationResult').style.color = '#64748b';
-    showToast('🛰️ Scan started', 'info');
-
-    let steps = 0;
-    const interval = setInterval(() => {
-        steps++;
-        if(steps === 1) {
-            document.getElementById('scanLabel').textContent = '📡 Analyzing AIS data...';
-            document.getElementById('aisShips').textContent = '12';
-            document.getElementById('aisSuspicious').textContent = '3';
-        } else if(steps === 2) {
-            document.getElementById('scanLabel').textContent = '🔬 Triboelectric sensing...';
-            document.getElementById('triboStatus').textContent = '● Detecting';
-            document.getElementById('triboStatus').style.color = '#fbbf24';
-            document.getElementById('oilResult').textContent = 'Detecting...';
-            document.getElementById('oilResult').style.color = '#fbbf24';
-        } else if(steps === 3) {
-            document.getElementById('scanLabel').textContent = '🛸 Deploying UAVs...';
-            document.getElementById('uavCount').textContent = '4';
-            document.getElementById('uavCoverage').textContent = '92%';
-            document.getElementById('shipsResult').textContent = '3 Ships';
-            document.getElementById('shipsResult').style.color = '#4a9eff';
-        } else if(steps === 4) {
-            document.getElementById('scanLabel').textContent = '🛰️ SAR Satellite processing...';
-            document.getElementById('formationResult').textContent = 'Analyzing...';
-            document.getElementById('formationResult').style.color = '#fbbf24';
-        } else if(steps === 5) {
-            document.getElementById('scanLabel').textContent = '✅ Scan Complete!';
-            document.getElementById('scanStatus').textContent = 'Complete';
-            document.getElementById('scanStatus').style.color = '#00d4aa';
-            document.getElementById('oilResult').textContent = '✅ Detected ✓';
-            document.getElementById('oilResult').style.color = '#00d4aa';
-            document.getElementById('shipsResult').textContent = '3 Ships (1 Suspicious)';
-            document.getElementById('shipsResult').style.color = '#4a9eff';
-            document.getElementById('formationResult').textContent = 'Parallel ⚠️';
-            document.getElementById('formationResult').style.color = '#fbbf24';
-            document.getElementById('triboStatus').textContent = '● Oil Signature Found';
-            document.getElementById('triboStatus').style.color = '#00d4aa';
-            document.getElementById('scanLine').classList.remove('active');
-            clearInterval(interval);
-            isScanning = false;
-            showToast('✅ Scan complete!', 'success');
-        }
-    }, 1200);
-}
+function triggerNaturalAlert(){ /* disabled - fake demo removed */ }
 
 function resetSatellite() {
     if(isScanning) return;
@@ -3706,6 +3635,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
 
 <!-- trigger redeploy -->
+
 
 
 
