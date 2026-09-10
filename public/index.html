@@ -5035,12 +5035,66 @@ body { padding-right: 0 !important; }
 
   console.log('[nav] fix armed');
 })();
+</script><script id="kn-fix">
+// Kannada language fix
+(function(){
+  function apply(){
+    if (typeof window.setLanguage !== 'function'){ setTimeout(apply, 400); return; }
+
+    // Wrap setLanguage so 'kn' works even if translations are missing
+    var orig = window.setLanguage;
+    window.setLanguage = function(lang){
+      try {
+        if (lang === 'kn' && (typeof translations === 'undefined' || !translations.kn)){
+          console.warn('[kn] translations object missing — applying partial');
+        }
+        return orig.apply(this, arguments);
+      } catch(e){
+        console.warn('[kn] setLanguage error:', e.message);
+      }
+      // Fallback: manually apply Kannada strings
+      var kn = {
+        appTitle:'ಓಶನ್ ಐ', appStatus:'ಸಕ್ರಿಯ',
+        navDashboard:'ಡ್ಯಾಶ್ಬೋರ್ಡ್', navImage:'ಚಿತ್ರ ವಿಶ್ಲೇಷಣೆ', navMap:'ನಕ್ಷೆ',
+        navSatellite:'ಉಪಗ್ರಹ', navAlert:'ಎಚ್ಚರಿಕೆ', navAnalysis:'ವಿಶ್ಲೇಷಣೆ',
+        navSettings:'ಸಂಯೋಜನೆಗಳು', navReview:'ಪರಿಶೀಲನಾ ಸರತಿ',
+        page1Title:'ಮಿಷನ್ ಡ್ಯಾಶ್ಬೋರ್ಡ್', page1Sub:'ನೈಜ ಸಮಯ ತೈಲ ಸೋರಿಕೆ ಮೇಲ್ವಿಚಾರಣೆ',
+        statShips:'ಹಡಗುಗಳು', statAlerts:'ಎಚ್ಚರಿಕೆಗಳು', statRisks:'ಅಪಾಯಗಳು',
+        statSuccess:'ಯಶಸ್ಸು', statCoverage:'ವ್ಯಾಪ್ತಿ',
+        weatherTitle:'ನೇರ ಹವಾಮಾನ', satelliteTitle:'ಉಪಗ್ರಹ ಸ್ಥಿತಿ',
+        aiTitle:'AI ವಿಶ್ವಾಸ', updateTitle:'ನೈಜ ಸಮಯ ನವೀಕರಣ'
+      };
+      Object.keys(kn).forEach(function(id){
+        var el = document.getElementById(id);
+        if (el) el.textContent = kn[id];
+      });
+    };
+    console.log('[kn] setLanguage patched');
+  }
+  apply();
+
+  // Also wire the Kannada button directly
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest('.lang-btn');
+    if (!btn) return;
+    if (/ಕನ್ನಡ/.test(btn.textContent)){
+      e.preventDefault();
+      window.setLanguage('kn');
+      document.querySelectorAll('.lang-btn').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      console.log('[kn] applied');
+    }
+  }, true);
+
+  console.log('[kn] fix armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
