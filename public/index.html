@@ -3629,12 +3629,104 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[ml] real detector armed');
 })();
+</script><script id="sar-live-fix">
+// Wire SAR Scanner "Start Scan" to fetch real vessel data
+(function(){
+  if (window.__sarLive) return;
+  window.__sarLive = true;
+
+  function setTxt(id, v){ var e = document.getElementById(id); if (e) e.textContent = v; }
+
+  function setStatus(txt, color){
+    var el = document.getElementById('scanStatus') || document.querySelector('[id*="scan"][id*="Status"]');
+    if (el){ el.textContent = 'Status: ' + txt; if (color) el.style.color = color; }
+  }
+
+  async function runScan(){
+    setStatus('Scanning…', '#00d4ff');
+    setTxt('scanOil', '…');
+    setTxt('scanShips', '…');
+    setTxt('scanFormation', '…');
+
+    try {
+      var r = await fetch('https://pocketworld.org/api/ships');
+      var d = await r.json();
+      var ships = d.ships || [];
+
+      // Filter to Bay of Bengal
+      var regional = ships.filter(function(s){
+        var lat = parseFloat(s.lat), lon = parseFloat(s.lng);
+        return isFinite(lat) && isFinite(lon) && lat >= 5 && lat <= 23 && lon >= 78 && lon <= 95;
+      });
+
+      var use = regional.length > 20 ? regional : ships.slice(0, 200);
+
+      // Count stationary (possible oil activity)
+      var stationary = use.filter(function(s){ return parseFloat(s.sog || 0) < 0.5; }).length;
+
+      // Detect clustering (2+ ships within 0.05 degrees)
+      var clusters = 0;
+      for (var i = 0; i < use.length; i++){
+        for (var j = i + 1; j < use.length; j++){
+          var dx = Math.abs(parseFloat(use[i].lat) - parseFloat(use[j].lat));
+          var dy = Math.abs(parseFloat(use[i].lng) - parseFloat(use[j].lng));
+          if (dx < 0.05 && dy < 0.05){ clusters++; break; }
+        }
+      }
+
+      // Oil likelihood from stationary clustering
+      var oilPct = Math.min(95, Math.round((stationary / Math.max(1, use.length)) * 100 + 5));
+
+      setTimeout(function(){
+        setTxt('scanOil', oilPct + '%');
+        setTxt('scanShips', use.length);
+        setTxt('scanFormation', clusters > 0 ? clusters : '0');
+        setStatus('Scan complete · ' + new Date().toTimeString().slice(0,8), '#00ff9d');
+        console.log('[sar] scan done · ships', use.length, 'stationary', stationary, 'clusters', clusters, 'oil', oilPct + '%');
+      }, 1500);
+    } catch(e){
+      setStatus('Scan failed: ' + e.message, '#ff4757');
+    }
+  }
+
+  // Find the buttons by text
+  function wire(){
+    var found = 0;
+    document.querySelectorAll('button').forEach(function(b){
+      if (b.dataset.sarWired) return;
+      var txt = (b.textContent || '').trim().toLowerCase();
+
+      if (/start scan/.test(txt)){
+        b.dataset.sarWired = '1';
+        b.addEventListener('click', function(e){ e.preventDefault(); runScan(); }, true);
+        found++;
+      }
+      if (/^reset$/.test(txt)){
+        b.dataset.sarWired = '1';
+        b.addEventListener('click', function(e){
+          e.preventDefault();
+          setTxt('scanOil', '--');
+          setTxt('scanShips', '--');
+          setTxt('scanFormation', '--');
+          setStatus('Ready', '#94a3b8');
+        }, true);
+        found++;
+      }
+    });
+    if (found) console.log('[sar] wired', found, 'buttons');
+  }
+  wire();
+  setInterval(wire, 2000);
+
+  console.log('[sar] live scan armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
