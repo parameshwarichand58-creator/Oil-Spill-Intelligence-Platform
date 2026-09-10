@@ -3662,12 +3662,108 @@ body[data-theme="light"]::-webkit-scrollbar-track {
   tick();
   setInterval(tick, 60000); // refresh every 1 minute instead of 10
 })();
+</script><style id="sms-toast-css">
+#sms-toast {
+  position: fixed; top: 40px; right: 24px; z-index: 999999;
+  background: rgba(8, 14, 22, 0.95);
+  border: 1px solid rgba(0, 255, 157, 0.4);
+  border-left: 3px solid #00ff9d;
+  border-radius: 4px;
+  padding: 14px 18px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: #c9d8ea;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 24px rgba(0, 255, 157, 0.15);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  transform: translateX(20px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  pointer-events: none;
+  max-width: 340px;
+  line-height: 1.5;
+}
+#sms-toast.show { opacity: 1; transform: translateX(0); }
+#sms-toast .sms-head {
+  color: #00ff9d; letter-spacing: 0.12em; font-size: 10px;
+  text-transform: uppercase; margin-bottom: 6px;
+  text-shadow: 0 0 8px rgba(0, 255, 157, 0.6);
+}
+#sms-toast .sms-num { color: #00d4ff; font-family: 'Orbitron', monospace; }
+#sms-toast .sms-msg { color: #94a3b8; font-size: 11px; margin-top: 4px; }
+#sms-toast .sms-time { color: #5c7286; font-size: 9px; margin-top: 6px; letter-spacing: 0.08em; }
+</style>
+
+<div id="sms-toast">
+  <div class="sms-head">📱 SMS ALERT DISPATCHED</div>
+  <div>To: <span class="sms-num" id="sms-to">--</span></div>
+  <div class="sms-msg" id="sms-msg">--</div>
+  <div class="sms-time" id="sms-time">--</div>
+</div>
+
+<script>
+// Demo SMS toast — fires when threat level escalates
+(function(){
+  var lastLevel = null;
+  var numberCache = '+91 98765 43210';
+
+  function getNumber(){
+    var inp = document.getElementById('smsNumber');
+    if (inp && inp.value) numberCache = inp.value;
+    return numberCache;
+  }
+
+  function showToast(level, density){
+    var toast = document.getElementById('sms-toast');
+    if (!toast) return;
+    document.getElementById('sms-to').textContent = getNumber();
+    document.getElementById('sms-msg').textContent =
+      'Oil Spill Alert — Threat Level: ' + level + ' (density ' + density.toFixed(1) + ' µg/L)';
+    var t = new Date();
+    document.getElementById('sms-time').textContent =
+      'Sent ' + t.toTimeString().slice(0,8) + ' · ' +
+      (level === 'HIGH' ? 'Coast Guard + DG Shipping' :
+       level === 'SEVERE' ? 'Full Response Team' : 'On-call Operator');
+    toast.classList.add('show');
+    setTimeout(function(){ toast.classList.remove('show'); }, 8000);
+
+    // Also log to mission log
+    if (typeof logLine === 'function'){
+      logLine('\uD83D\uDCF1 SMS alert sent to ' + getNumber() + ' — ' + level);
+    } else {
+      console.log('[sms] alert sent to', getNumber(), level);
+    }
+  }
+
+  // Watch the threat element every second
+  setInterval(function(){
+    var el = document.getElementById('threatLevelText');
+    if (!el) return;
+    var lvl = (el.textContent || '').trim();
+    if (!/^(LOW|MODERATE|HIGH|SEVERE)$/.test(lvl)) return;
+
+    if (lastLevel !== null && lvl !== lastLevel){
+      // Only notify on upward escalation (or SEVERE)
+      var rank = { LOW:0, MODERATE:1, HIGH:2, SEVERE:3 };
+      if (rank[lvl] > rank[lastLevel] || lvl === 'SEVERE'){
+        // Get current density for the message
+        var density = 0;
+        var dEl = document.getElementById('liveOilDensity') || document.getElementById('anaDensity');
+        if (dEl) density = parseFloat(dEl.textContent) || 0;
+        showToast(lvl, density);
+      }
+    }
+    lastLevel = lvl;
+  }, 1000);
+
+  console.log('[sms] demo notifier armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
