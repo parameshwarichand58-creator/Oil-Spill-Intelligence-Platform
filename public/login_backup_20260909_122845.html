@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Ocean Trinity</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #0b1120; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .auth-box { background: #111a30; padding: 40px; border-radius: 10px; border: 2px solid #00f0ff; width: 400px; text-align: center; }
+        h1 { color: #00f0ff; margin-bottom: 20px; }
+        .btn { width: 100%; padding: 15px; margin-bottom: 10px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        .btn-google { background: #fff; color: #333; }
+        .btn-guest { background: #00f0ff; color: #000; }
+        .btn-register { background: #334155; color: #fff; }
+        input { width: 100%; padding: 12px; margin-bottom: 10px; background: #0b1120; border: 1px solid #334155; color: #fff; border-radius: 5px; }
+        .links { margin-top: 15px; font-size: 14px; color: #94a3b8; }
+    </style>
+</head>
+<body>
+    <div class="auth-box">
+        <h1>🌊 Ocean Trinity</h1>
+        <button class="btn btn-google" onclick="handleGoogleLogin()">Continue with Google</button>
+        <button class="btn btn-guest" onclick="handleGuestLogin()">🚀 Continue as Guest</button>
+        <button class="btn btn-register" onclick="document.getElementById('regForm').style.display='block'">Register New User</button>
+        <div id="regForm" style="display:none; margin-top: 20px;">
+            <input type="text" placeholder="Username">
+            <input type="email" placeholder="Email">
+            <input type="password" placeholder="Password">
+            <button class="btn btn-guest" onclick="alert('Registration Successful!'); window.location.href='index.html';">Create Account</button>
+        </div>
+        <div class="links">Already have an account? <a href="#" style="color:#00f0ff;">Login</a></div>
+    </div>
+    <script>
+        function handleGoogleLogin() { const user = { name: "Google User", email: "user@gmail.com" }; localStorage.setItem('oilSpillUser', JSON.stringify(user)); window.location.href = 'index.html'; }
+        function handleGuestLogin() { const user = { name: 'Guest', email: 'guest@oceaneye.com' }; localStorage.setItem('oilSpillUser', JSON.stringify(user)); window.location.href = 'index.html'; }
+    </script>
+</body>
+</html>

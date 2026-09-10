@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - OCEAN EYE</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family:'Rajdhani',sans-serif;
+            background:#05080f;
+            color:#e8edf5;
+            min-height:100vh;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            background:radial-gradient(ellipse at 50% 30%, rgba(10,40,100,0.2) 0%, transparent 70%), #05080f;
+        }
+        .login-container {
+            background:rgba(255,255,255,0.01);
+            border:1px solid rgba(255,255,255,0.02);
+            border-radius:16px;
+            padding:40px 48px;
+            max-width:420px;
+            width:100%;
+            backdrop-filter:blur(20px);
+            box-shadow:0 20px 60px rgba(0,0,0,0.5);
+        }
+        .login-container .logo {
+            text-align:center;
+            margin-bottom:30px;
+        }
+        .login-container .logo .icon { font-size:48px; display:block; }
+        .login-container .logo h1 {
+            font-family:'Orbitron',monospace;
+            font-size:24px;
+            font-weight:700;
+            background:linear-gradient(135deg,#4a9eff,#00d4aa);
+            -webkit-background-clip:text;
+            -webkit-text-fill-color:transparent;
+            margin-top:6px;
+        }
+        .login-container .logo .sub {
+            font-size:11px;
+            color:#64748b;
+            font-family:'Share Tech Mono',monospace;
+        }
+        .form-group { margin-bottom:16px; }
+        .form-group label {
+            display:block;
+            font-size:11px;
+            color:#94a3b8;
+            font-weight:600;
+            margin-bottom:4px;
+            font-family:'Share Tech Mono',monospace;
+            text-transform:uppercase;
+            letter-spacing:0.5px;
+        }
+        .form-group input, .form-group select {
+            width:100%;
+            padding:10px 14px;
+            background:rgba(255,255,255,0.02);
+            border:1px solid rgba(255,255,255,0.04);
+            border-radius:6px;
+            color:#e8edf5;
+            font-size:14px;
+            font-family:'Rajdhani',sans-serif;
+            transition:all 0.3s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            border-color:rgba(74,158,255,0.2);
+            outline:none;
+            background:rgba(255,255,255,0.03);
+        }
+        .form-group input::placeholder { color:#475569; }
+        .btn-primary {
+            width:100%;
+            padding:12px;
+            background:linear-gradient(135deg,#4a9eff,#7c3aed);
+            border:none;
+            border-radius:6px;
+            color:#fff;
+            font-size:16px;
+            font-weight:600;
+            cursor:pointer;
+            transition:all 0.3s;
+            font-family:'Rajdhani',sans-serif;
+            box-shadow:0 2px 15px rgba(74,158,255,0.1);
+        }
+        .btn-primary:hover { transform:translateY(-2px); box-shadow:0 4px 25px rgba(74,158,255,0.2); }
+        .btn-secondary {
+            width:100%;
+            padding:12px;
+            background:rgba(255,255,255,0.02);
+            border:1px solid rgba(255,255,255,0.04);
+            border-radius:6px;
+            color:#94a3b8;
+            font-size:16px;
+            font-weight:600;
+            cursor:pointer;
+            transition:all 0.3s;
+            font-family:'Rajdhani',sans-serif;
+        }
+        .btn-secondary:hover { background:rgba(255,255,255,0.04); color:#e8edf5; }
+        .divider {
+            display:flex;
+            align-items:center;
+            gap:12px;
+            margin:20px 0;
+            color:#475569;
+            font-size:11px;
+            font-family:'Share Tech Mono',monospace;
+        }
+        .divider::before, .divider::after {
+            content:'';
+            flex:1;
+            height:1px;
+            background:rgba(255,255,255,0.03);
+        }
+        .role-selector { margin:12px 0; }
+        .role-selector label { font-size:11px; color:#94a3b8; margin-right:12px; }
+        .role-selector select { width:auto; padding:6px 12px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.04); border-radius:4px; color:#e8edf5; font-size:12px; }
+        .toast-container { position:fixed; top:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:8px; max-width:350px; }
+        .toast { background:rgba(5,8,15,0.95); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.03); border-radius:8px; padding:10px 14px; color:#e8edf5; font-size:12px; animation:slideIn 0.4s ease; box-shadow:0 10px 40px rgba(0,0,0,0.5); }
+        .toast.success { border-left:3px solid #00d4aa; }
+        .toast.error { border-left:3px solid #ef4444; }
+        .toast.warning { border-left:3px solid #f59e0b; }
+        .toast.info { border-left:3px solid #4a9eff; }
+        @keyframes slideIn { 0%{opacity:0;transform:translateX(20px);} 100%{opacity:1;transform:translateX(0);} }
+    </style>
+</head>
+<body>
+<div class="login-container" id="loginContainer">
+    <div class="logo">
+        <span class="icon">🛰️</span>
+        <h1>OCEAN EYE</h1>
+        <div class="sub">AI-Powered Oil Spill Intelligence</div>
+    </div>
+
+    <div id="registerForm">
+        <div class="form-group">
+            <label>Full Name</label>
+            <input type="text" id="regName" placeholder="Enter your full name" value="Parameshwari Chand">
+        </div>
+        <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="regEmail" placeholder="Enter your email" value="param@oceaneye.com">
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="regPassword" placeholder="Create a password" value="password123">
+        </div>
+        <div class="form-group role-selector">
+            <label>Role</label>
+            <select id="regRole">
+                <option value="operator">👤 Operator</option>
+                <option value="isro">🛰️ ISRO</option>
+                <option value="coastguard">⚓ Coast Guard</option>
+                <option value="dgship">⚓ DG Shipping</option>
+                <option value="admin">👑 Admin</option>
+            </select>
+        </div>
+        <button class="btn-primary" onclick="registerUser()">🚀 Register New User</button>
+        <div class="divider">OR</div>
+        <button class="btn-secondary" onclick="showLogin()">🔑 Already have an account? Login</button>
+    </div>
+
+    <div id="loginForm" style="display:none;">
+        <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="loginEmail" placeholder="Enter your email" value="param@oceaneye.com">
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="loginPassword" placeholder="Enter your password" value="password123">
+        </div>
+        <button class="btn-primary" onclick="loginUser()">🔐 Login</button>
+        <div class="divider">OR</div>
+        <button class="btn-secondary" onclick="showRegister()">📝 Create New Account</button>
+        <div style="margin-top:12px;">
+            <button class="btn-secondary" onclick="guestLogin()" style="width:100%;">👤 Continue as Guest</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer') || (() => {
+        const c = document.createElement('div');
+        c.id = 'toastContainer';
+        c.className = 'toast-container';
+        document.body.appendChild(c);
+        return c;
+    })();
+    const toast = document.createElement('div');
+    toast.className = 'toast ' + type;
+    const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+    toast.innerHTML = '<div style="display:flex;align-items:center;gap:10px;">' +
+        '<span style="font-size:20px;">' + (icons[type] || 'ℹ️') + '</span>' +
+        '<span style="flex:1;font-size:13px;">' + message + '</span>' +
+        '<button class="close-toast" onclick="this.parentElement.parentElement.remove()" style="background:transparent;border:none;color:#64748b;cursor:pointer;font-size:16px;">✕</button>' +
+        '</div>';
+    container.appendChild(toast);
+    setTimeout(() => { if (toast.parentElement) toast.remove(); }, 5000);
+}
+
+function showLogin() {
+    document.getElementById('registerForm').style.display = 'none';
+    document.getElementById('loginForm').style.display = 'block';
+}
+
+function showRegister() {
+    document.getElementById('registerForm').style.display = 'block';
+    document.getElementById('loginForm').style.display = 'none';
+}
+
+function registerUser() {
+    const name = document.getElementById('regName').value.trim() || 'New User';
+    const email = document.getElementById('regEmail').value.trim() || 'user@oceaneye.com';
+    const password = document.getElementById('regPassword').value || 'password123';
+    const role = document.getElementById('regRole').value || 'operator';
+    
+    if (!name || !email) {
+        showToast('⚠️ Please fill in all fields', 'warning');
+        return;
+    }
+    
+    const user = {
+        email: email,
+        name: name,
+        role: role,
+        avatar: 'https://ui-avatars.com/api/?name=' + encodeURIComponent(name) + '&background=4a9eff&color=fff&size=128',
+        registered: true
+    };
+    
+    localStorage.setItem('oilSpillUser', JSON.stringify(user));
+    
+    const registered = JSON.parse(localStorage.getItem('registeredUsers') || '[]');
+    registered.push(user);
+    localStorage.setItem('registeredUsers', JSON.stringify(registered));
+    
+    showToast('✅ Registration successful! Welcome, ' + name + '!', 'success');
+    setTimeout(() => { window.location.href = 'index.html'; }, 500);
+}
+
+function loginUser() {
+    const email = document.getElementById('loginEmail').value.trim() || 'param@oceaneye.com';
+    const password = document.getElementById('loginPassword').value || '';
+    
+    const registered = JSON.parse(localStorage.getItem('registeredUsers') || '[]');
+    const found = registered.find(u => u.email === email);
+    
+    if (found) {
+        localStorage.setItem('oilSpillUser', JSON.stringify(found));
+        showToast('✅ Welcome back, ' + found.name + '!', 'success');
+        setTimeout(() => { window.location.href = 'index.html'; }, 500);
+    } else {
+        const name = email.split('@')[0] || 'User';
+        const user = {
+            email: email,
+            name: name,
+            role: 'operator',
+            avatar: 'https://ui-avatars.com/api/?name=' + encodeURIComponent(name) + '&background=4a9eff&color=fff&size=128'
+        };
+        localStorage.setItem('oilSpillUser', JSON.stringify(user));
+        showToast('✅ Logged in as ' + user.name + '!', 'success');
+        setTimeout(() => { window.location.href = 'index.html'; }, 500);
+    }
+}
+
+function guestLogin() {
+    const user = {
+        email: 'guest@oceaneye.com',
+        name: 'Guest',
+        role: 'operator',
+        avatar: 'https://ui-avatars.com/api/?name=Guest&background=64748b&color=fff&size=128'
+    };
+    localStorage.setItem('oilSpillUser', JSON.stringify(user));
+    showToast('👤 Welcome, Guest!', 'info');
+    setTimeout(() => { window.location.href = 'index.html'; }, 500);
+}
+
+window.onload = function() {
+    const user = localStorage.getItem('oilSpillUser');
+    if (user) {
+        try {
+            const parsed = JSON.parse(user);
+            if (parsed.email) {
+                window.location.href = 'index.html';
+                return;
+            }
+        } catch(e) {}
+    }
+    showRegister();
+    console.log('🚀 OCEAN EYE - Login page loaded');
+};
+</script>
+</body>
+</html>
