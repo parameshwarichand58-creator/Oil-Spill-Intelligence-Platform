@@ -2968,12 +2968,105 @@ input:focus,select:focus,textarea:focus{
   setTimeout(poll, 500);
   setInterval(poll, 30000);
 })();
+</script><script>
+// Threat level updater — v2, targets element by structure, not font-size
+(function(){
+  var RELAY = 'https://oil-spill-intelligence-platform.onrender.com';
+  var lastDensity = null;
+
+  function threatFor(d){
+    if (d >= 400) return { txt:'SEVERE',   color:'#ff4757' };
+    if (d >= 150) return { txt:'HIGH',     color:'#ff4757' };
+    if (d >= 50)  return { txt:'MODERATE', color:'#fbbf24' };
+    return          { txt:'LOW',      color:'#00d4aa' };
+  }
+
+  function findThreatElement(){
+    // Find the label "Current Threat Level" then walk to find the big word
+    var all = document.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++){
+      var el = all[i];
+      var t = (el.textContent || '').trim();
+      if (t === 'Current Threat Level'){
+        // Walk up to the container, then find the biggest text child
+        var container = el.parentElement;
+        for (var up = 0; up < 4 && container; up++){
+          var candidates = container.querySelectorAll('*');
+          for (var j = 0; j < candidates.length; j++){
+            var c = candidates[j];
+            if (c.children.length > 0) continue;
+            var ct = (c.textContent || '').trim();
+            if (/^(LOW|MODERATE|HIGH|SEVERE)$/.test(ct)){
+              return c;
+            }
+          }
+          container = container.parentElement;
+        }
+      }
+    }
+    return null;
+  }
+
+  function applyThreat(d){
+    var t = threatFor(d);
+    var el = findThreatElement();
+    if (el){
+      el.textContent = t.txt;
+      el.style.color = t.color;
+      el.style.transition = 'color 0.4s ease';
+    }
+
+    // Update the note below
+    var all = document.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++){
+      var n = all[i];
+      if (n.children.length > 0) continue;
+      var nt = (n.textContent || '').trim();
+      if (/^No active threats|escalate per threshold|All systems nominal/.test(nt)){
+        n.textContent = (t.txt === 'LOW')
+          ? 'No active threats \u00B7 All systems nominal'
+          : t.txt + ' \u00B7 escalate per threshold table';
+      }
+    }
+
+    // Highlight the correct segment in the threat bar
+    var segs = document.querySelectorAll('*');
+    for (var k = 0; k < segs.length; k++){
+      var s = segs[k];
+      if (s.children.length > 0) continue;
+      var st = (s.textContent || '').trim();
+      if (/^(LOW|MODERATE|HIGH|SEVERE)$/i.test(st) && s !== el){
+        // This is a segment label — dim or highlight
+        var isActive = st.toUpperCase() === t.txt;
+        s.style.opacity = isActive ? '1' : '0.4';
+      }
+    }
+
+    console.log('[threat]', t.txt, 'for density', d.toFixed(1));
+  }
+
+  async function poll(){
+    try {
+      var r = await fetch(RELAY + '/health');
+      var data = await r.json();
+      var d = typeof data.density === 'number' ? data.density : 0;
+      if (d !== lastDensity){
+        lastDensity = d;
+        applyThreat(d);
+      }
+    } catch(e) { console.warn('[threat]', e.message); }
+  }
+
+  setTimeout(poll, 800);
+  setInterval(poll, 15000);
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
