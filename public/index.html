@@ -568,6 +568,11 @@
             <div style="font-family:'Orbitron',monospace;font-size:18px;font-weight:700;color:#4a9eff;margin-bottom:5px;" id="alertStatusText">System Ready</div>
             <div style="color:#94a3b8;font-size:12px;font-family:'Share Tech Mono',monospace;" id="alertMessageText">Awaiting command</div>
             <div class="btn-group" style="margin-top:15px;">
+                <button class="btn btn-danger" onclick="triggerNaturalAlert()"><i class="fas fa-water"></i> <span>Natural Seepage</span></button>
+                <button class="btn btn-danger" onclick="triggerCulpritAlert()"><i class="fas fa-ship"></i> <span>Culprit Theft</span></button>
+                <button class="btn btn-danger" onclick="triggerInternalAlert()"><i class="fas fa-cog"></i> <span>Internal Failure</span></button>
+            </div>
+            <div class="btn-group">
                 <button class="btn btn-danger" onclick="triggerCollisionAlert()"><i class="fas fa-car-crash"></i> <span>Collision</span></button>
                 <button class="btn btn-danger" onclick="triggerFireAlert()"><i class="fas fa-fire"></i> <span>Fire</span></button>
                 <button class="btn btn-danger" onclick="triggerWeatherAlert()"><i class="fas fa-cloud-rain"></i> <span>Weather</span></button>
@@ -3742,12 +3747,50 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[sar] ready — overriding runSatelliteScan');
 })();
+</script><script id="alert-6scenarios">
+// Restore the 3 trigger functions on the Alert page
+(function(){
+  if (window.__alert6) return;
+  window.__alert6 = true;
+
+  function fire(title, msg){
+    // Use existing startAlert if available
+    if (typeof window.startAlert === 'function'){
+      try { window.startAlert(msg); return; } catch(e){}
+    }
+    // Fallback: show a toast/popup ourselves
+    var el = document.createElement('div');
+    el.style.cssText = 'position:fixed;top:44px;right:24px;z-index:999999;' +
+      'background:rgba(8,14,22,0.96);border:1px solid rgba(255,71,87,0.6);' +
+      'border-left:3px solid #ff4757;border-radius:4px;padding:14px 20px;' +
+      'font-family:\'Share Tech Mono\',monospace;font-size:12px;color:#c9d8ea;' +
+      'box-shadow:0 8px 32px rgba(0,0,0,0.5);backdrop-filter:blur(12px);' +
+      'max-width:340px;line-height:1.6;';
+    el.innerHTML = '<div style="color:#ff4757;letter-spacing:0.14em;font-size:11px;margin-bottom:6px;">🚨 ' + title + '</div>' + msg;
+    document.body.appendChild(el);
+    setTimeout(function(){ el.remove(); }, 5000);
+    console.log('[alert6] fired:', title);
+  }
+
+  window.triggerNaturalAlert = function(){
+    fire('NATURAL SEEPAGE', 'Natural oil seepage detected. No vessel involved. Environmental response required.');
+  };
+  window.triggerCulpritAlert = function(){
+    fire('CULPRIT THEFT', 'Oil spill detected! Cargo Gamma attempted illegal transfer. Coast guard notified.');
+  };
+  window.triggerInternalAlert = function(){
+    fire('INTERNAL FAILURE', 'Internal failure on Cargo Gamma. Mechanical breakdown causing discharge.');
+  };
+
+  console.log('[alert6] natural / culprit / internal wired');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
