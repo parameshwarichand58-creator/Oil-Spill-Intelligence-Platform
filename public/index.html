@@ -2602,12 +2602,48 @@ body.analysis-visible #analysis-pause-btn { display: block; }
   apply();
   console.log('[pie] color fix armed');
 })();
+</script><script id="pie-balance">
+// Balance Spill Types so no single slice dominates forever
+(function(){
+  if (window.__pieBalance) return;
+  window.__pieBalance = true;
+
+  // Every 15 s: normalize the doughnut so all 4 slices stay visible
+  setInterval(function(){
+    var canvas = document.getElementById('pieChart');
+    if (!canvas || typeof Chart === 'undefined') return;
+    var chart = Chart.getChart && Chart.getChart(canvas);
+    if (!chart) return;
+
+    var data = chart.data.datasets[0].data.slice();
+    // Halve every slice but keep a floor of 1 so nothing disappears
+    var normalized = data.map(function(v){
+      return Math.max(1, Math.floor(v / 2));
+    });
+
+    // If any slice is more than 60% of total, cap it
+    var total = normalized.reduce(function(a,b){ return a+b; }, 0);
+    normalized = normalized.map(function(v){
+      if (v / total > 0.55) {
+        return Math.max(1, Math.floor(total * 0.4));
+      }
+      return v;
+    });
+
+    chart.data.datasets[0].data = normalized;
+    chart.update('none');
+    console.log('[pie] normalized:', normalized.join('/'));
+  }, 15000);
+
+  console.log('[pie] balance armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
