@@ -3635,7 +3635,6 @@ body.analysis-visible #analysis-pause-btn { display: block; }
   window.__sarScan = true;
 
   function $(id){ return document.getElementById(id); }
-  function setTxt(id, v){ var e = $(id); if (e) e.textContent = v; }
   function setStatus(t){
     var e = $('scanStatus');
     if (!e){
@@ -3649,6 +3648,36 @@ body.analysis-visible #analysis-pause-btn { display: block; }
     if (e) e.textContent = t;
   }
 
+  // Find a value element by its label text
+  function findByLabel(label){
+    var all = document.querySelectorAll('div, span, p, td');
+    for (var i = 0; i < all.length; i++){
+      var el = all[i];
+      if (el.children.length > 0) continue;
+      var t = (el.textContent || '').trim().toLowerCase();
+      if (t === label.toLowerCase()){
+        // Look for sibling or parent's next element that contains a value
+        var parent = el.parentElement;
+        if (!parent) continue;
+        // Check parent's children for a value element
+        for (var j = 0; j < parent.children.length; j++){
+          var c = parent.children[j];
+          if (c === el) continue;
+          if (c.children.length === 0){
+            var ct = (c.textContent || '').trim();
+            if (ct === '--' || /^\d/.test(ct) || ct === '…'){
+              return c;
+            }
+          }
+        }
+        // Check next sibling
+        var sib = el.nextElementSibling;
+        if (sib && sib.children.length === 0) return sib;
+      }
+    }
+    return null;
+  }
+
   function readDensity(){
     var ids = ['tick-density','liveOilDensity','anaDensity'];
     for (var i = 0; i < ids.length; i++){
@@ -3659,7 +3688,6 @@ body.analysis-visible #analysis-pause-btn { display: block; }
     }
     return 65;
   }
-
   function readShips(){
     var ids = ['tick-ships','statShips','liveVessels'];
     for (var i = 0; i < ids.length; i++){
@@ -3668,31 +3696,37 @@ body.analysis-visible #analysis-pause-btn { display: block; }
       var n = parseInt((el.textContent||'').replace(/[^0-9]/g,''));
       if (isFinite(n) && n > 0) return n;
     }
-    return 40;
+    return 0;
   }
 
   function scan(){
     setStatus('Scanning…');
-    setTxt('scanOil', '…');
-    setTxt('scanShips', '…');
-    setTxt('scanFormation', '…');
+
+    // Find by label
+    var oilEl = findByLabel('Oil');
+    var shipsEl = findByLabel('Ships');
+    var formEl = findByLabel('Formation');
+    console.log('[sar] found els:', !!oilEl, !!shipsEl, !!formEl);
+
+    if (oilEl) oilEl.textContent = '…';
+    if (shipsEl) shipsEl.textContent = '…';
+    if (formEl) formEl.textContent = '…';
 
     setTimeout(function(){
       var density = readDensity();
       var ships = readShips();
 
-      // Oil detected always YES if density present, with severity based on density
       var oilPct = Math.round((density / 200) * 60 + 8);
       if (oilPct < 20) oilPct = 20;
       if (oilPct > 95) oilPct = 95;
       var clusters = Math.max(1, Math.round(density / 25));
 
-      setTxt('scanOil', oilPct + '%');
-      setTxt('scanShips', ships);
-      setTxt('scanFormation', clusters);
+      if (oilEl) oilEl.textContent = oilPct + '%';
+      if (shipsEl) shipsEl.textContent = ships;
+      if (formEl) formEl.textContent = clusters;
+
       setStatus('Scan complete · ' + new Date().toTimeString().slice(0,8));
 
-      // Show oil detected message
       var el = $('analysisResult');
       if (el){
         var color = oilPct >= 55 ? '#ff4757' : oilPct >= 35 ? '#fbbf24' : '#00ff9d';
@@ -3707,32 +3741,27 @@ body.analysis-visible #analysis-pause-btn { display: block; }
         el.style.border = '1px solid rgba(255,71,87,0.35)';
         el.style.borderLeft = '3px solid ' + color;
         el.innerHTML =
-          '<div style="color:' + color + ';letter-spacing:0.14em;font-size:12px;margin-bottom:10px;">' +
-            '⚠ OIL DETECTED · ' + level + ' · ' + oilPct + '%' +
-          '</div>' +
+          '<div style="color:' + color + ';letter-spacing:0.14em;font-size:12px;margin-bottom:10px;">⚠ OIL DETECTED · ' + level + ' · ' + oilPct + '%</div>' +
           '<div style="color:#c9d8ea;font-size:11px;line-height:1.7;">' +
             '<strong style="color:#fff;">Live density:</strong> ' + density.toFixed(1) + ' µg/L<br>' +
             '<strong style="color:#fff;">Vessels in AOI:</strong> ' + ships + '<br>' +
             '<strong style="color:#fff;">Formations:</strong> ' + clusters + ' cluster' + (clusters>1?'s':'') + '<br>' +
-            '<strong style="color:#fff;">Source:</strong> Live AIS + density feed<br>' +
             '<strong style="color:#fff;">Time:</strong> ' + new Date().toUTCString().slice(17,25) + ' UTC' +
-          '</div>' +
-          '<div style="color:#5c7286;font-size:9px;margin-top:10px;letter-spacing:0.08em;">' +
-            'SCAN COMPLETE · ' + new Date().toTimeString().slice(0,8) +
           '</div>';
       }
 
-      console.log('[sar] oil detected | density=' + density + ' oil=' + oilPct + '% ships=' + ships);
+      console.log('[sar] density=' + density + ' oil=' + oilPct + '% ships=' + ships);
     }, 1200);
   }
 
   function reset(){
-    setTxt('scanOil', '--');
-    setTxt('scanShips', '--');
-    setTxt('scanFormation', '--');
+    var oilEl = findByLabel('Oil');
+    var shipsEl = findByLabel('Ships');
+    var formEl = findByLabel('Formation');
+    if (oilEl) oilEl.textContent = '--';
+    if (shipsEl) shipsEl.textContent = '--';
+    if (formEl) formEl.textContent = '--';
     setStatus('Ready');
-    var el = $('analysisResult');
-    if (el) el.innerHTML = '⏳ Waiting for scan...';
   }
 
   function wire(){
@@ -3751,12 +3780,11 @@ body.analysis-visible #analysis-pause-btn { display: block; }
         found++;
       }
     });
-    if (found) console.log('[sar] wired', found, 'button(s)');
+    if (found) console.log('[sar] wired', found);
   }
   wire();
   setInterval(wire, 2000);
-
-  console.log('[sar] scanner armed');
+  console.log('[sar] label-based scanner armed');
 })();
 </script></html>
 
@@ -3764,6 +3792,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
 
 <!-- trigger redeploy -->
+
 
 
 
