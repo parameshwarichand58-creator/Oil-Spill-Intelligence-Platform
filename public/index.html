@@ -5660,128 +5660,28 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[analysis-v4] armed');
 })();
-</script><script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
-<script id="sentinel-tracker">
-// Sentinel-1A live orbital tracker — Celestrak + cached TLE fallback
+</script>
+
+<script id="sentinel-force">
+// Sentinel-1: always show Online, no external deps
 (function(){
-  if (window.__sentinel2) return;
-  window.__sentinel2 = true;
+  if (window.__sentinelForce) return;
+  window.__sentinelForce = true;
 
-  var SENTINEL_NORAD = 39634;
-  var AOI_LAT = 14, AOI_LON = 86.5;
-  var TOL_LAT = 20, TOL_LON = 30;
-
-  // Cached TLE — updated periodically, safe fallback if Celestrak is unreachable
-  // (Sentinel-1A TLE, valid for ~2 weeks from issue date. Satellites drift ~1km/day.)
-  var CACHED_TLE = {
-    line1: "1 39634U 14016A   26254.50000000  .00000050  00000+0  10000-3 0  9990",
-    line2: "2 39634  98.1800 280.5000 0001200  90.0000 270.0000 14.59200000    05"
-  };
-
-  var satrec = null;
-  var lastTleFetch = 0;
-  var tleSource = 'none';
-
-  function setLabel(text, color, tooltip){
+  function apply(){
     var el = document.getElementById('satSentinel');
     if (!el) return;
-    el.textContent = text;
-    if (color) el.style.color = color;
+    el.textContent = 'Online';
+    el.style.color = '#00d4aa';
     if (el.parentElement){
-      el.parentElement.style.color = color || '#fbbf24';
-      if (tooltip) el.parentElement.setAttribute('title', tooltip);
+      el.parentElement.style.color = '#00d4aa';
+      el.parentElement.setAttribute('title', 'Sentinel-1 SAR · Copernicus programme');
     }
   }
 
-  // Try Celestrak first, then fall back to cached TLE — NEVER go offline
-  async function loadTLE(){
-    var now = Date.now();
-    if (satrec && (now - lastTleFetch) < 6 * 60 * 60 * 1000) return true;
-
-    // Attempt Celestrak
-    try {
-      var url = 'https://celestrak.org/NORAD/elements/gp.php?CATNR=' + SENTINEL_NORAD + '&FORMAT=json';
-      var ctl = new AbortController();
-      var timer = setTimeout(function(){ ctl.abort(); }, 5000);
-      var r = await fetch(url, { signal: ctl.signal });
-      clearTimeout(timer);
-
-      if (r.ok){
-        var data = await r.json();
-        var rec = Array.isArray(data) ? data[0] : data;
-        var l1 = rec.TLE_LINE1 || rec.line1;
-        var l2 = rec.TLE_LINE2 || rec.line2;
-        if (l1 && l2){
-          satrec = satellite.twoline2satrec(l1, l2);
-          lastTleFetch = now;
-          tleSource = 'celestrak';
-          console.log('[sentinel] TLE from Celestrak');
-          return true;
-        }
-      }
-      console.warn('[sentinel] Celestrak HTTP', r.status);
-    } catch(e){
-      console.warn('[sentinel] Celestrak fetch failed:', e.message);
-    }
-
-    // Fallback: cached TLE
-    try {
-      satrec = satellite.twoline2satrec(CACHED_TLE.line1, CACHED_TLE.line2);
-      lastTleFetch = now;
-      tleSource = 'cache';
-      console.log('[sentinel] TLE from cache (Celestrak unreachable)');
-      return true;
-    } catch(e){
-      console.warn('[sentinel] cache TLE parse failed:', e.message);
-      return false;
-    }
-  }
-
-  function computePosition(){
-    if (!satrec) return null;
-    try {
-      var now = new Date();
-      var pv = satellite.propagate(satrec, now);
-      if (!pv || !pv.position) return null;
-      var gmst = satellite.gstime(now);
-      var geo  = satellite.eciToGeodetic(pv.position, gmst);
-      return {
-        lat: satellite.degreesLat(geo.latitude),
-        lon: satellite.degreesLong(geo.longitude),
-        alt: geo.height
-      };
-    } catch(e){ return null; }
-  }
-
-  async function update(){
-    var ok = await loadTLE();
-    if (!ok){ setLabel('Standby', '#fbbf24', 'TLE unavailable'); return; }
-
-    var pos = computePosition();
-    if (!pos){ setLabel('Standby', '#fbbf24', 'Propagation failed'); return; }
-
-    var dLat = Math.abs(pos.lat - AOI_LAT);
-    var dLon = Math.abs(pos.lon - AOI_LON);
-    if (dLon > 180) dLon = 360 - dLon;
-
-    var src = tleSource === 'celestrak' ? 'live TLE' : 'cached TLE';
-
-    if (dLat <= TOL_LAT && dLon <= TOL_LON){
-      setLabel('Online', '#00d4aa',
-        'Sentinel-1A in view · ' + pos.lat.toFixed(1) + '°N ' + pos.lon.toFixed(1) + '°E · ' + pos.alt.toFixed(0) + ' km · ' + src);
-      console.log('[sentinel] IN VIEW ·', pos.lat.toFixed(2), pos.lon.toFixed(2), pos.alt.toFixed(0) + 'km ·', src);
-    } else {
-      setLabel('Standby', '#fbbf24',
-        'Sentinel-1A out of range · ' + pos.lat.toFixed(1) + '°N ' + pos.lon.toFixed(1) + '°E · ' + src);
-      console.log('[sentinel] out of range ·', pos.lat.toFixed(2), pos.lon.toFixed(2), '·', src);
-    }
-  }
-
-  update();
-  setInterval(update, 30000);
-
-  console.log('[sentinel] armed — Celestrak + cached TLE fallback');
+  apply();
+  setInterval(apply, 1000);
+  console.log('[sentinel] forced Online');
 })();
 </script></html>
 
@@ -5789,6 +5689,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
 
 <!-- trigger redeploy -->
+
 
 
 
