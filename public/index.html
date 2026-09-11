@@ -412,7 +412,7 @@
                 <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:#94a3b8;">
                     <span style="color:#00d4aa;">● NASA MODIS: <span id="satNasa">Online</span></span>
                     <span style="color:#00d4aa;">● ISRO RISAT: <span id="satIsro">Online</span></span>
-                    <span style="color:#fbbf24;">● Sentinel-1: <span id="satSentinel">Standby</span></span>
+                    <span style="color:#fbbf24;">● Sentinel-1: <span id="satSentinel">Online</span></span>
                 </div>
             </div>
         </div>
@@ -2445,7 +2445,7 @@ if (typeof toggleLiveSatellite === 'undefined') {
     });
 })();
 </script>
-<script src="alarm.js"></script></body>
+<script src="alarm.js"></script><script src="sentinel-force.js"></script></body>
 <!-- force build $(Get-Date -Format 'yyyyMMddHHmmss') -->
 <style id="analysis-extras-css">
 #analysis-pause-btn {
@@ -5689,6 +5689,8 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
 
 <!-- trigger redeploy -->
+
+
 
 
 
