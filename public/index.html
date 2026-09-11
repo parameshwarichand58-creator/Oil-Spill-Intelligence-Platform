@@ -4286,12 +4286,65 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[hero] v3 armed — earth + sat + threat');
 })();
+</script><script id="text-cleaner">
+// Strip duplicate units from weather and ocean values (runtime)
+(function(){
+  if (window.__textCleaner) return;
+  window.__textCleaner = true;
+
+  var ids = ['weatherWind','weatherHumidity','weatherTemp','tick-wind','tick-hum'];
+  var rules = [
+    { re: /(km\/h)(\s*km\/h)+/gi, sub: '$1' },
+    { re: /(%)(\s*%)+/g,         sub: '$1' },
+    { re: /(°C)(\s*°C)+/g,       sub: '$1' },
+    { re: /(km)(\s*km)+/g,       sub: '$1' }
+  ];
+
+  function clean(el){
+    if (!el) return;
+    var txt = el.textContent || '';
+    var orig = txt;
+    for (var i = 0; i < rules.length; i++){
+      txt = txt.replace(rules[i].re, rules[i].sub);
+    }
+    if (txt !== orig) el.textContent = txt;
+  }
+
+  function sweep(){
+    for (var i = 0; i < ids.length; i++){
+      clean(document.getElementById(ids[i]));
+    }
+  }
+
+  // Run frequently — catches dynamic updates
+  setInterval(sweep, 500);
+
+  // Also use MutationObserver for instant correction
+  try {
+    var observer = new MutationObserver(function(muts){
+      for (var i = 0; i < muts.length; i++){
+        var t = muts[i].target;
+        if (!t || !t.id) continue;
+        if (ids.indexOf(t.id) >= 0) clean(t);
+      }
+    });
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      characterDataOldValue: false
+    });
+  } catch(e){}
+
+  console.log('[cleaner] text deduplicator armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
