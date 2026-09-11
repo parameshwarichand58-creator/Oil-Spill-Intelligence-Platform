@@ -5315,12 +5315,214 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[robo-sound] armed — voice + beeps + hum');
 })();
+</script><script id="emergency-siren">
+// Emergency siren + reason voice for alert scenarios
+(function(){
+  if (window.__emergencySiren) return;
+  window.__emergencySiren = true;
+
+  var audioCtx = null;
+  var sirenOsc = null;
+  var sirenGain = null;
+  var sirenLFO = null;
+  var sirenRunning = false;
+
+  // Reasons for each scenario — spoken after the title
+  var REASONS = {
+    natural:   { title: 'Natural Seepage',   reason: 'Seabed hydrocarbon release detected. No vessel involved. Environmental hazard to marine ecosystem.' },
+    culprit:   { title: 'Culprit Theft',     reason: 'Illegal ship-to-ship oil transfer in progress. Cargo Gamma attempted unauthorized discharge. Coast guard alerted.' },
+    internal:  { title: 'Internal Failure',  reason: 'Mechanical breakdown on Cargo Gamma. Bilge water discharge detected. Ship integrity compromised.' },
+    collision: { title: 'Collision Accident',reason: 'Two vessels collided. Active oil spill from damaged hull. Immediate emergency response required.' },
+    fire:      { title: 'Fire Explosion',    reason: 'Tanker fire detected. Explosion risk. Full emergency response activated. All hands to stations.' },
+    weather:   { title: 'Weather Storm',     reason: 'Severe storm cell approaching at forty five knots. Hull stress risk. Vessels advised to alter course immediately.' }
+  };
+
+  function ensureAudio(){
+    if (audioCtx) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch(e){}
+    return audioCtx;
+  }
+
+  // ------- EMERGENCY SIREN (continuous, sweeping up-down like real alarm) -------
+  function startSiren(){
+    var ctx = ensureAudio();
+    if (!ctx || sirenRunning) return;
+    sirenRunning = true;
+
+    sirenOsc = ctx.createOscillator();
+    sirenGain = ctx.createGain();
+    sirenLFO = ctx.createOscillator();
+    var lfoGain = ctx.createGain();
+
+    // Main tone — sawtooth for harsh siren feel
+    sirenOsc.type = 'sawtooth';
+    sirenOsc.frequency.value = 650;
+
+    // LFO modulates the pitch between 550 and 750 Hz (classic air-raid sweep)
+    sirenLFO.type = 'sine';
+    sirenLFO.frequency.value = 1.6;   // sweeps 1.6 times per second
+    lfoGain.gain.value = 120;
+
+    sirenLFO.connect(lfoGain);
+    lfoGain.connect(sirenOsc.frequency);
+
+    // Volume envelope
+    sirenGain.gain.value = 0.0001;
+    var now = ctx.currentTime;
+    sirenGain.gain.linearRampToValueAtTime(0.11, now + 0.25);
+
+    sirenOsc.connect(sirenGain);
+    sirenGain.connect(ctx.destination);
+
+    sirenOsc.start(now);
+    sirenLFO.start(now);
+
+    console.log('[siren] started');
+  }
+
+  function stopSiren(){
+    if (!sirenRunning) return;
+    sirenRunning = false;
+    try {
+      var ctx = ensureAudio();
+      if (sirenGain && ctx){
+        var now = ctx.currentTime;
+        sirenGain.gain.cancelScheduledValues(now);
+        sirenGain.gain.linearRampToValueAtTime(0.0001, now + 0.3);
+      }
+      setTimeout(function(){
+        try { if (sirenOsc) sirenOsc.stop(); } catch(e){}
+        try { if (sirenLFO) sirenLFO.stop(); } catch(e){}
+        try { if (sirenOsc) sirenOsc.disconnect(); } catch(e){}
+        try { if (sirenGain) sirenGain.disconnect(); } catch(e){}
+        sirenOsc = null; sirenLFO = null; sirenGain = null;
+      }, 350);
+    } catch(e){}
+    console.log('[siren] stopped');
+  }
+
+  // ------- VOICE: title then reason with emergency intonation -------
+  function speakEmergency(scenario){
+    try {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+
+      var voices = window.speechSynthesis.getVoices();
+      var preferred = voices.find(function(v){ return /en-US|en-GB|Google US English|Microsoft David/i.test(v.name); }) || voices[0];
+
+      // Phrase 1: "Emergency. Emergency."
+      var u0 = new SpeechSynthesisUtterance('Emergency. Emergency.');
+      u0.rate = 0.9; u0.pitch = 1.5; u0.volume = 1.0;
+      if (preferred) u0.voice = preferred;
+
+      // Phrase 2: scenario title
+      var u1 = new SpeechSynthesisUtterance('Alert level. ' + scenario.title + '.');
+      u1.rate = 0.9; u1.pitch = 1.55; u1.volume = 1.0;
+      if (preferred) u1.voice = preferred;
+
+      // Phrase 3: reason
+      var u2 = new SpeechSynthesisUtterance(scenario.reason);
+      u2.rate = 0.92; u2.pitch = 1.4; u2.volume = 1.0;
+      if (preferred) u2.voice = preferred;
+
+      // Phrase 4: "Take immediate action"
+      var u3 = new SpeechSynthesisUtterance('Take immediate action.');
+      u3.rate = 0.9; u3.pitch = 1.5; u3.volume = 1.0;
+      if (preferred) u3.voice = preferred;
+
+      window.speechSynthesis.speak(u0);
+      window.speechSynthesis.speak(u1);
+      window.speechSynthesis.speak(u2);
+      window.speechSynthesis.speak(u3);
+
+      console.log('[siren-voice] speaking:', scenario.title);
+    } catch(e){}
+  }
+
+  // ------- Hook into the roboScene show/hide -------
+  function getScenarioKey(){
+    // Read from the title text
+    var titleEl = document.getElementById('roboTitle');
+    if (!titleEl) return null;
+    var t = (titleEl.textContent || '').toLowerCase();
+    if (t.indexOf('natural') >= 0) return 'natural';
+    if (t.indexOf('culprit') >= 0 || t.indexOf('spill detected') >= 0) return 'culprit';
+    if (t.indexOf('internal') >= 0) return 'internal';
+    if (t.indexOf('collision') >= 0) return 'collision';
+    if (t.indexOf('fire') >= 0) return 'fire';
+    if (t.indexOf('weather') >= 0) return 'weather';
+    return null;
+  }
+
+  function hookScene(){
+    var scene = document.getElementById('roboScene');
+    if (!scene) { setTimeout(hookScene, 500); return; }
+    if (scene.dataset.sirenHooked) return;
+    scene.dataset.sirenHooked = '1';
+
+    var observer = new MutationObserver(function(muts){
+      muts.forEach(function(m){
+        var showing = scene.classList.contains('show');
+        if (showing && !scene.dataset.sirenActive){
+          scene.dataset.sirenActive = '1';
+          ensureAudio();
+          startSiren();
+          setTimeout(function(){
+            var key = getScenarioKey();
+            if (key && REASONS[key]) speakEmergency(REASONS[key]);
+          }, 700);
+        } else if (!showing && scene.dataset.sirenActive){
+          scene.dataset.sirenActive = '';
+          stopSiren();
+          try { window.speechSynthesis.cancel(); } catch(e){}
+        }
+      });
+    });
+    observer.observe(scene, { attributes: true, attributeFilter: ['class'] });
+    console.log('[siren] scene hooked');
+  }
+
+  function hookStop(){
+    var btn = document.getElementById('roboStop');
+    if (!btn || btn.dataset.sirenWired) return;
+    btn.dataset.sirenWired = '1';
+    btn.addEventListener('click', function(){
+      stopSiren();
+      try { window.speechSynthesis.cancel(); } catch(e){}
+    });
+  }
+
+  // Preload voices
+  if (window.speechSynthesis){
+    window.speechSynthesis.onvoiceschanged = function(){};
+    window.speechSynthesis.getVoices();
+  }
+
+  // Resume audio on first user click anywhere
+  document.addEventListener('click', function once(){
+    ensureAudio();
+    document.removeEventListener('click', once);
+  }, { once: true });
+
+  hookScene();
+  hookStop();
+  setInterval(hookScene, 2000);
+  setInterval(hookStop, 2000);
+
+  console.log('[siren] armed — emergency siren + reason voice');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
