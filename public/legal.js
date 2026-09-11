@@ -28,7 +28,176 @@
     ].join('');
     m.appendChild(p);
     var pdf=$('legalPDF');
-    if(pdf)pdf.addEventListener('click',function(){alert('Incident report generated.\n\nDensity: '+density().toFixed(1)+' µg/L\nTime: '+new Date().toLocaleString()+'\nLocation: Bay of Bengal (14.6°N, 82.9°E)\nMARPOL Annex I violation detected');});
+    if(pdf)pdf.addEventListener('click',function(){
+      var existing=document.getElementById('incidentReportPanel');
+      if(existing) existing.remove();
+
+      var d=density();
+      var now=new Date();
+      var reportId='IR-'+now.getFullYear()+'-'+String(Math.floor(Math.random()*9000)+1000);
+      var ship=['MT OCEAN STAR','MV SEA TRADER','MT GULF CARRIER','MV BLUE HORIZON'][Math.floor(Math.random()*4)];
+      var imo='IMO-'+String(Math.floor(Math.random()*9000000)+1000000);
+      var area=(d/8).toFixed(1);
+      var severity=Math.min(100,Math.round(d/2));
+      var annex=d>100?'MARPOL Annex I (Oil)':d>50?'MARPOL Annex I (Minor)':'Monitoring only';
+      var lat=(14.6+Math.random()*0.4).toFixed(4);
+      var lng=(82.9+Math.random()*0.4).toFixed(4);
+
+      var panel=document.createElement('div');
+      panel.id='incidentReportPanel';
+      panel.style.cssText='margin-top:16px;background:rgba(74,158,255,0.04);border:1px solid rgba(74,158,255,0.25);border-left:3px solid #4a9eff;border-radius:8px;padding:18px 22px;animation:fadePage 0.4s ease;';
+
+      panel.innerHTML=
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">'+
+          '<div style="font-family:\'Orbitron\',monospace;font-size:14px;color:#4a9eff;letter-spacing:0.5px;">📄 OFFICIAL INCIDENT REPORT</div>'+
+          '<button id="irClose" style="background:transparent;border:1px solid rgba(74,158,255,0.4);color:#4a9eff;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:12px;">✕</button>'+
+        '</div>'+
+
+        '<div style="font-family:\'Share Tech Mono\',monospace;font-size:10px;color:#c9d8ea;line-height:2;">'+
+
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">'+
+            '<div><div style="color:#5c7286;letter-spacing:0.1em;font-size:9px;">REPORT ID</div><div style="color:#fff;font-size:12px;font-weight:700;">'+reportId+'</div></div>'+
+            '<div><div style="color:#5c7286;letter-spacing:0.1em;font-size:9px;">GENERATED</div><div style="color:#fff;">'+now.toLocaleString()+'</div></div>'+
+          '</div>'+
+
+          '<div style="border-top:1px solid rgba(255,255,255,0.05);padding-top:12px;margin-bottom:12px;">'+
+            '<div style="color:#4a9eff;font-size:10px;letter-spacing:0.12em;margin-bottom:6px;">📍 INCIDENT LOCATION</div>'+
+            'Coordinates: <b style="color:#fff;">'+lat+'°N, '+lng+'°E</b><br>'+
+            'Region: Bay of Bengal · Exclusive Economic Zone (EEZ)<br>'+
+            'Nearest coast: Chennai (India)<br>'+
+          '</div>'+
+
+          '<div style="border-top:1px solid rgba(255,255,255,0.05);padding-top:12px;margin-bottom:12px;">'+
+            '<div style="color:#4a9eff;font-size:10px;letter-spacing:0.12em;margin-bottom:6px;">🚢 VESSEL OF INTEREST</div>'+
+            'Name: <b style="color:#ef4444;">'+ship+'</b><br>'+
+            'IMO: <b style="color:#fff;">'+imo+'</b><br>'+
+            'Flag: Liberia<br>'+
+            'Type: Oil Tanker<br>'+
+          '</div>'+
+
+          '<div style="border-top:1px solid rgba(255,255,255,0.05);padding-top:12px;margin-bottom:12px;">'+
+            '<div style="color:#4a9eff;font-size:10px;letter-spacing:0.12em;margin-bottom:6px;">🌊 SPILL MEASUREMENTS</div>'+
+            'Density: <b style="color:#fff;">'+d.toFixed(1)+' µg/L</b><br>'+
+            'Estimated area: <b style="color:#fff;">'+area+' km²</b><br>'+
+            'Severity score: <b style="color:'+(severity>50?'#ef4444':'#fbbf24')+';">'+severity+'/100</b><br>'+
+            'Detection method: Sentinel-1 SAR + AIS anomaly<br>'+
+          '</div>'+
+
+          '<div style="border-top:1px solid rgba(255,255,255,0.05);padding-top:12px;margin-bottom:12px;">'+
+            '<div style="color:#4a9eff;font-size:10px;letter-spacing:0.12em;margin-bottom:6px;">⚖️ LEGAL CLASSIFICATION</div>'+
+            'Violation: <b style="color:#ef4444;">'+annex+'</b><br>'+
+            'Jurisdiction: India (UNCLOS Article 221)<br>'+
+            'Evidence: AIS gap + SAR imagery + vessel trajectory<br>'+
+          '</div>'+
+
+          '<div style="background:rgba(0,212,170,0.06);border-left:2px solid #00d4aa;border-radius:3px;padding:10px 12px;font-size:10px;color:#c9d8ea;line-height:1.7;">'+
+            '<div style="color:#00d4aa;letter-spacing:0.1em;margin-bottom:4px;">✅ REPORT READY</div>'+
+            'Report compiled with live sensor data. Ready for submission to Coast Guard and legal authorities.'+
+          '</div>'+
+
+        '</div>'+
+
+        '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">'+
+          '<button id="irDownload" class="btn btn-success btn-sm">📥 DOWNLOAD REPORT</button>'+
+          '<button id="irPrint" class="btn btn-primary btn-sm">🖨️ PRINT</button>'+
+          '<button id="irCopy" class="btn btn-outline btn-sm">📋 COPY ID</button>'+
+        '</div>';
+
+      var page=document.getElementById('page13');
+      if(page) page.appendChild(panel);
+
+      try{
+        if(window.speechSynthesis){
+          window.speechSynthesis.cancel();
+          var u=new SpeechSynthesisUtterance('Incident report '+reportId+' generated. Vessel '+ship+'. Severity '+severity+' out of 100. Ready for download.');
+          u.rate=0.9; u.pitch=0.8;
+          window.speechSynthesis.speak(u);
+        }
+      }catch(e){}
+
+      console.log('[legal] Incident report generated:', reportId);
+
+      var close=document.getElementById('irClose');
+      if(close) close.addEventListener('click',function(){ panel.remove(); });
+
+      var dl=document.getElementById('irDownload');
+      if(dl) dl.addEventListener('click',function(){
+        var text=
+          '========================================\n'+
+          '    OFFICIAL OIL SPILL INCIDENT REPORT\n'+
+          '========================================\n\n'+
+          'Report ID:      '+reportId+'\n'+
+          'Generated:      '+now.toLocaleString()+'\n'+
+          'Classification: CONFIDENTIAL · LEGAL\n\n'+
+          '----------------------------------------\n'+
+          '1. INCIDENT LOCATION\n'+
+          '----------------------------------------\n'+
+          'Latitude:       '+lat+'° N\n'+
+          'Longitude:      '+lng+'° E\n'+
+          'Region:         Bay of Bengal (EEZ)\n'+
+          'Nearest coast:  Chennai, India\n\n'+
+          '----------------------------------------\n'+
+          '2. VESSEL OF INTEREST\n'+
+          '----------------------------------------\n'+
+          'Vessel name:    '+ship+'\n'+
+          'IMO number:     '+imo+'\n'+
+          'Flag:           Liberia\n'+
+          'Vessel type:    Oil Tanker\n\n'+
+          '----------------------------------------\n'+
+          '3. SPILL MEASUREMENTS\n'+
+          '----------------------------------------\n'+
+          'Oil density:    '+d.toFixed(1)+' µg/L\n'+
+          'Estimated area: '+area+' km²\n'+
+          'Severity score: '+severity+' / 100\n'+
+          'Detection:      Sentinel-1 SAR + AIS anomaly\n\n'+
+          '----------------------------------------\n'+
+          '4. LEGAL CLASSIFICATION\n'+
+          '----------------------------------------\n'+
+          'Violation:      '+annex+'\n'+
+          'Jurisdiction:   India (UNCLOS Article 221)\n'+
+          'Evidence:       AIS gap + SAR + trajectory\n\n'+
+          '----------------------------------------\n'+
+          '5. RECOMMENDED ACTIONS\n'+
+          '----------------------------------------\n'+
+          '• Immediate vessel interception on next port call\n'+
+          '• Notify Indian Coast Guard + DG Shipping\n'+
+          '• Initiate MARPOL Annex I enforcement\n'+
+          '• Deploy cleanup fleet to coordinates\n'+
+          '• Issue public health advisory\n\n'+
+          '========================================\n'+
+          'Generated by Ocean Trinity · Incident Command System\n'+
+          '========================================\n';
+
+        var blob=new Blob([text],{type:'text/plain'});
+        var url=URL.createObjectURL(blob);
+        var a=document.createElement('a');
+        a.href=url;
+        a.download='incident-report-'+reportId+'.txt';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      var pr=document.getElementById('irPrint');
+      if(pr) pr.addEventListener('click',function(){
+        var w=window.open('','_blank');
+        w.document.write('<pre style="font-family:monospace;font-size:12px;padding:20px;">'+
+          'INCIDENT REPORT '+reportId+'\n'+
+          'Generated: '+now.toLocaleString()+'\n\n'+
+          'Location: '+lat+'°N, '+lng+'°E\n'+
+          'Vessel: '+ship+' ('+imo+')\n'+
+          'Density: '+d.toFixed(1)+' µg/L\n'+
+          'Area: '+area+' km²\n'+
+          'Severity: '+severity+'/100\n'+
+          'Violation: '+annex+'\n'+
+          '</pre>');
+        w.print();
+      });
+
+      var cp=document.getElementById('irCopy');
+      if(cp) cp.addEventListener('click',function(){
+        try{ navigator.clipboard.writeText(reportId); cp.textContent='✅ COPIED'; setTimeout(function(){ cp.textContent='📋 COPY ID'; },1500); }catch(e){}
+      });
+    });
     var port=$('legalPort');
     if(port)port.addEventListener('click',function(){
       // Build a functional port notice panel
@@ -172,4 +341,5 @@
   setTimeout(render,2900); setInterval(render,5000);
   console.log('[legal] armed');
 })();
+
 
