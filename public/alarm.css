@@ -1,0 +1,5 @@
+#roboBody.steady { animation: none !important; transform: rotate(0) translateY(0) !important; }
+#roboBody.steady .robo-leg,
+#roboBody.steady .robo-arm { animation: none !important; }
+#roboBody.steady .robo-mouth { animation: roboTalk 0.35s ease-in-out infinite alternate; }
+#roboScene.show { background: rgba(0,0,0,0.85) !important; }
