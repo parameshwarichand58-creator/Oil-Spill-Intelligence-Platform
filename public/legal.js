@@ -30,7 +30,110 @@
     var pdf=$('legalPDF');
     if(pdf)pdf.addEventListener('click',function(){alert('Incident report generated.\n\nDensity: '+density().toFixed(1)+' µg/L\nTime: '+new Date().toLocaleString()+'\nLocation: Bay of Bengal (14.6°N, 82.9°E)\nMARPOL Annex I violation detected');});
     var port=$('legalPort');
-    if(port)port.addEventListener('click',function(){alert('Port State Notice sent to next port-of-call: Chennai Port Authority');});
+    if(port)port.addEventListener('click',function(){
+      // Build a functional port notice panel
+      var existing=document.getElementById('portNoticePanel');
+      if(existing) existing.remove();
+
+      var d=density();
+      var now=new Date();
+      var ships=['MT OCEAN STAR','MV SEA TRADER','MT GULF CARRIER','MV BLUE HORIZON'];
+      var ship=ships[Math.floor(Math.random()*ships.length)];
+      var ports=['Chennai Port Authority','Visakhapatnam Port Trust','Kochi Port Authority','Paradip Port Trust','Mumbai Port Trust'];
+      var port=ports[Math.floor(Math.random()*ports.length)];
+      var noticeId='PSN-'+now.getFullYear()+'-'+String(Math.floor(Math.random()*9000)+1000);
+      var etaHours=Math.floor(Math.random()*36)+12;
+      var ets=new Date(now.getTime()+etaHours*3600*1000);
+
+      var panel=document.createElement('div');
+      panel.id='portNoticePanel';
+      panel.style.cssText='margin-top:16px;background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.3);border-left:3px solid #ef4444;border-radius:8px;padding:16px 20px;animation:fadePage 0.4s ease;';
+
+      panel.innerHTML=
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'+
+          '<div style="font-family:\'Orbitron\',monospace;font-size:13px;color:#ef4444;letter-spacing:0.5px;">🚢 PORT STATE NOTICE DISPATCHED</div>'+
+          '<button id="psnClose" style="background:transparent;border:1px solid rgba(239,68,68,0.4);color:#f87171;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:12px;">✕</button>'+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;font-family:\'Share Tech Mono\',monospace;font-size:10px;color:#c9d8ea;line-height:2;">'+
+          '<div>'+
+            '<div style="color:#5c7286;letter-spacing:0.1em;font-size:9px;">NOTICE ID</div>'+
+            '<div style="color:#fff;font-size:12px;font-weight:700;">'+noticeId+'</div>'+
+            '<div style="color:#5c7286;letter-spacing:0.1em;font-size:9px;margin-top:8px;">TARGET PORT</div>'+
+            '<div style="color:#4a9eff;font-size:12px;font-weight:700;">'+port+'</div>'+
+            '<div style="color:#5c7286;letter-spacing:0.1em;font-size:9px;margin-top:8px;">CULPRIT VESSEL</div>'+
+            '<div style="color:#ef4444;font-size:12px;font-weight:700;">'+ship+'</div>'+
+          '</div>'+
+          '<div>'+
+            '<div style="color:#5c7286;letter-spacing:0.1em;font-size:9px;">ISSUED AT</div>'+
+            '<div style="color:#fff;">'+now.toLocaleString()+'</div>'+
+            '<div style="color:#5c7286;letter-spacing:0.1em;font-size:9px;margin-top:8px;">VESSEL ETA</div>'+
+            '<div style="color:#fbbf24;">'+ets.toLocaleString()+' ('+etaHours+'h)</div>'+
+            '<div style="color:#5c7286;letter-spacing:0.1em;font-size:9px;margin-top:8px;">SPILL DENSITY</div>'+
+            '<div style="color:#fff;">'+d.toFixed(1)+' µg/L · MARPOL Annex I</div>'+
+          '</div>'+
+        '</div>'+
+        '<div style="margin-top:14px;padding:10px 12px;background:rgba(0,212,170,0.06);border-left:2px solid #00d4aa;border-radius:3px;font-family:\'Share Tech Mono\',monospace;font-size:10px;color:#c9d8ea;line-height:1.7;">'+
+          '<div style="color:#00d4aa;letter-spacing:0.1em;margin-bottom:4px;">✅ DELIVERY CONFIRMED</div>'+
+          'Notice received by '+port+' at '+now.toLocaleTimeString()+'.<br>'+
+          'Vessel will be detained on arrival for inspection under UNCLOS Article 221.<br>'+
+          'Copy forwarded to Indian Coast Guard + DG Shipping.'
+        '</div>'+
+        '<div style="margin-top:12px;display:flex;gap:8px;">'+
+          '<button id="psnDownload" class="btn btn-outline btn-sm">📄 DOWNLOAD NOTICE</button>'+
+          '<button id="psnCopy" class="btn btn-outline btn-sm">📋 COPY ID</button>'+
+        '</div>';
+
+      var page=document.getElementById('page13');
+      if(page) page.appendChild(panel);
+
+      // Voice confirmation
+      try{
+        if(window.speechSynthesis){
+          window.speechSynthesis.cancel();
+          var u=new SpeechSynthesisUtterance('Port state notice '+noticeId+' dispatched to '+port+'. Vessel '+ship+' will be detained on arrival.');
+          u.rate=0.9; u.pitch=0.8;
+          window.speechSynthesis.speak(u);
+        }
+      }catch(e){}
+
+      console.log('[legal] Port State Notice sent:', noticeId, '·', port, '·', ship);
+
+      // Wire close
+      var close=document.getElementById('psnClose');
+      if(close) close.addEventListener('click',function(){ panel.remove(); });
+
+      // Wire download
+      var dl=document.getElementById('psnDownload');
+      if(dl) dl.addEventListener('click',function(){
+        var text='PORT STATE NOTICE\n'+
+          '==================\n'+
+          'Notice ID: '+noticeId+'\n'+
+          'Target Port: '+port+'\n'+
+          'Culprit Vessel: '+ship+'\n'+
+          'Issued At: '+now.toLocaleString()+'\n'+
+          'Vessel ETA: '+ets.toLocaleString()+'\n'+
+          'Spill Density: '+d.toFixed(1)+' µg/L\n'+
+          'Violation: MARPOL Annex I\n'+
+          'Legal Basis: UNCLOS Article 221\n\n'+
+          'Copy forwarded to:\n'+
+          '- Indian Coast Guard\n'+
+          '- DG Shipping\n'+
+          '- Pollution Control Board\n';
+        var blob=new Blob([text],{type:'text/plain'});
+        var url=URL.createObjectURL(blob);
+        var a=document.createElement('a');
+        a.href=url;
+        a.download='port-state-notice-'+noticeId+'.txt';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      // Wire copy
+      var cp=document.getElementById('psnCopy');
+      if(cp) cp.addEventListener('click',function(){
+        try{ navigator.clipboard.writeText(noticeId); cp.textContent='✅ COPIED'; setTimeout(function(){ cp.textContent='📋 COPY ID'; },1500); }catch(e){}
+      });
+    });
   }
   function render(){
     page();
@@ -69,3 +172,4 @@
   setTimeout(render,2900); setInterval(render,5000);
   console.log('[legal] armed');
 })();
+
