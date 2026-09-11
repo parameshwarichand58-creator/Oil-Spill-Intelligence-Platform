@@ -3,11 +3,12 @@
   window.__voiceAlert = true;
 
   var lastSpokenRisk = null;
-  var voiceEnabled = true;
+  var voiceEnabled = false;   // OFF by default — must click START
   var toggleBtn = null;
   var unlocked = false;
 
-  // Clean text for speech — remove special chars that confuse TTS
+  var ALERT_TEXT = 'Warning. An oil spill has occurred. The fishing areas must be closed immediately. Food safety teams need to be deployed to test the fish P A H levels.';
+
   function clean(t){
     return (t||'')
       .replace(/µg\/kg/g,'micrograms per kilogram')
@@ -47,11 +48,22 @@
     u.volume = silent ? 0 : 1.0;
     var v = pickVoice();
     if (v) u.voice = v;
+    // Force LOOPING: when speech ends, replay after 3s if still enabled
+    u.onend = function(){
+      if (voiceEnabled && window.__alertLoop !== false){
+        setTimeout(function(){
+          if (voiceEnabled) speak(text);
+        }, 3000);
+      }
+    };
     window.speechSynthesis.speak(u);
     if (!silent) console.log('[voice-alert] spoken ·', c);
   }
 
-  // Read the RECOMMENDED ACTION text from Food Safety panel
+  function stopSpeaking(){
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+  }
+
   function readActionText(){
     var el = document.getElementById('fsAction');
     if (!el) return null;
@@ -67,73 +79,94 @@
     setTimeout(function(){ try { speak(' ', true); } catch(e){} }, 400);
     console.log('[voice-alert] unlocked by user gesture');
   }
-  ['click','touchstart','keydown','mousedown'].forEach(function(ev){
-    document.addEventListener(ev, unlock, { passive: true });
-  });
 
   function ensureToggle(){
     if (toggleBtn && document.body.contains(toggleBtn)) return;
     var panel = document.getElementById('foodSafetyPanel');
     if (!panel) return;
 
-    toggleBtn = document.createElement('button');
-    toggleBtn.id = 'voiceAlertToggle';
-    toggleBtn.style.cssText =
-      "margin-top:12px;width:100%;padding:8px 12px;" +
+    // Container with START + STOP buttons side by side
+    var wrap = document.createElement('div');
+    wrap.id = 'voiceAlertControls';
+    wrap.style.cssText = 'margin-top:12px;display:flex;gap:8px;';
+
+    // START button
+    var startBtn = document.createElement('button');
+    startBtn.id = 'voiceAlertStart';
+    startBtn.type = 'button';
+    startBtn.textContent = '▶ START VOICE ALERT';
+    startBtn.style.cssText =
+      "flex:1;padding:8px 12px;" +
       "background:rgba(255,71,87,0.12);border:1px solid rgba(255,71,87,0.55);" +
       "color:#ff4757;border-radius:3px;cursor:pointer;" +
       "font-family:'Share Tech Mono',monospace;font-size:10px;" +
       "letter-spacing:0.12em;text-transform:uppercase;transition:all 0.2s;";
-    toggleBtn.textContent = '🔊 VOICE ALERT: ON  (click to test)';
 
-    toggleBtn.addEventListener('click', function(ev){
+    // STOP button
+    var stopBtn = document.createElement('button');
+    stopBtn.id = 'voiceAlertStop';
+    stopBtn.type = 'button';
+    stopBtn.textContent = '⏹ STOP';
+    stopBtn.style.cssText =
+      "flex:0 0 90px;padding:8px 12px;" +
+      "background:rgba(92,114,134,0.12);border:1px solid rgba(92,114,134,0.4);" +
+      "color:#5c7286;border-radius:3px;cursor:pointer;" +
+      "font-family:'Share Tech Mono',monospace;font-size:10px;" +
+      "letter-spacing:0.12em;text-transform:uppercase;transition:all 0.2s;";
+
+    startBtn.onclick = function(ev){
       ev.stopPropagation();
       unlock();
+      voiceEnabled = true;
+      var msg = readActionText() || ALERT_TEXT;
+      speak(msg);
+      startBtn.textContent = '🔊 VOICE ALERT: ON';
+      startBtn.style.background = 'rgba(0,212,170,0.12)';
+      startBtn.style.borderColor = 'rgba(0,212,170,0.55)';
+      startBtn.style.color = '#00d4aa';
+      stopBtn.style.background = 'rgba(255,71,87,0.15)';
+      stopBtn.style.borderColor = 'rgba(255,71,87,0.55)';
+      stopBtn.style.color = '#ff4757';
+      console.log('[voice-alert] START clicked — looping enabled');
+    };
 
-      // First click: read current RECOMMENDED ACTION text
-      if (toggleBtn.dataset.tested !== '1'){
-        toggleBtn.dataset.tested = '1';
-        var msg = readActionText() || 'Voice alert test. System ready.';
-        setTimeout(function(){ speak(msg); }, 250);
-        toggleBtn.textContent = '🔊 VOICE ALERT: ON';
-        return;
-      }
+    stopBtn.onclick = function(ev){
+      ev.stopPropagation();
+      voiceEnabled = false;
+      stopSpeaking();
+      startBtn.textContent = '▶ START VOICE ALERT';
+      startBtn.style.background = 'rgba(255,71,87,0.12)';
+      startBtn.style.borderColor = 'rgba(255,71,87,0.55)';
+      startBtn.style.color = '#ff4757';
+      stopBtn.style.background = 'rgba(92,114,134,0.12)';
+      stopBtn.style.borderColor = 'rgba(92,114,134,0.4)';
+      stopBtn.style.color = '#5c7286';
+      console.log('[voice-alert] STOP clicked — looping halted');
+    };
 
-      // Subsequent clicks: toggle on/off
-      voiceEnabled = !voiceEnabled;
-      if (!voiceEnabled) window.speechSynthesis.cancel();
-      toggleBtn.textContent = voiceEnabled ? '🔊 VOICE ALERT: ON' : '🔇 VOICE ALERT: OFF';
-      toggleBtn.style.background = voiceEnabled ? 'rgba(255,71,87,0.12)' : 'rgba(92,114,134,0.12)';
-      toggleBtn.style.borderColor = voiceEnabled ? 'rgba(255,71,87,0.55)' : 'rgba(92,114,134,0.4)';
-      toggleBtn.style.color = voiceEnabled ? '#ff4757' : '#5c7286';
-      if (voiceEnabled) speak('Voice alerts enabled');
-    });
+    wrap.appendChild(startBtn);
+    wrap.appendChild(stopBtn);
+    panel.appendChild(wrap);
 
-    panel.appendChild(toggleBtn);
-    console.log('[voice-alert] toggle added');
+    toggleBtn = startBtn;
+    console.log('[voice-alert] START/STOP controls added');
   }
 
   function check(){
     var riskEl = document.getElementById('fsRisk');
     if (!riskEl) return;
     ensureToggle();
-
-    var risk = (riskEl.textContent || '').trim().toUpperCase();
-    var action = readActionText();
-
-    if ((risk === 'CRITICAL' || risk === 'UNSAFE') && risk !== lastSpokenRisk && action){
-      if (voiceEnabled && unlocked) speak(action);
-      else if (voiceEnabled && !unlocked) console.log('[voice-alert] risk=' + risk + ' — click page once to unlock audio');
-      lastSpokenRisk = risk;
-    } else if (risk === 'SAFE' || risk === 'CAUTION'){
-      lastSpokenRisk = risk;
-    }
+    // NOTE: automatic looping removed — voice only triggers on START button
   }
 
   if (window.speechSynthesis){
     window.speechSynthesis.onvoiceschanged = function(){};
   }
 
+  // Remove old single toggle button if it exists
+  var old = document.getElementById('voiceAlertToggle');
+  if (old && old.parentNode) old.parentNode.removeChild(old);
+
   setInterval(check, 3000);
-  console.log('[voice-alert] armed — speaks RECOMMENDED ACTION text');
+  console.log('[voice-alert] armed — manual START/STOP only, no auto-loop');
 })();
