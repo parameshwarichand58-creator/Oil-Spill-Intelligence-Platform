@@ -4339,12 +4339,61 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[cleaner] text deduplicator armed');
 })();
+</script><script id="ais-sync">
+// Sync the AIS Data panel to the same source the scanner uses
+(function(){
+  if (window.__aisSync) return;
+  window.__aisSync = true;
+
+  function readShips(){
+    var ids = ['tick-ships','statShips','liveVessels'];
+    for (var i = 0; i < ids.length; i++){
+      var el = document.getElementById(ids[i]);
+      if (!el) continue;
+      var n = parseInt((el.textContent || '').replace(/[^0-9]/g, ''));
+      if (isFinite(n) && n > 0) return n;
+    }
+    return null;
+  }
+
+  // Find the "Active Ships: N" text anywhere on the page and update the N
+  function findAisElement(){
+    var all = document.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++){
+      var el = all[i];
+      if (el.children.length > 0) continue;
+      var t = (el.textContent || '').trim();
+      if (/Active Ships:/i.test(t)){
+        return el;
+      }
+    }
+    return null;
+  }
+
+  function sync(){
+    var ships = readShips();
+    if (ships === null) return;
+
+    var el = findAisElement();
+    if (!el) return;
+
+    var current = el.textContent || '';
+    // Replace only the number after "Active Ships:"
+    var updated = current.replace(/(Active Ships:\s*)\d+/i, '$1' + ships);
+    if (updated !== current) el.textContent = updated;
+  }
+
+  setInterval(sync, 2000);
+  setTimeout(sync, 1500);
+  console.log('[ais-sync] armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
