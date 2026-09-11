@@ -7,8 +7,6 @@
   var toggleBtn = null;
   var unlocked = false;
 
-  var ALERT_TEXT = "Warning. An oil spill has occurred. The fishing areas must be closed immediately. Food safety teams need to be deployed to test the fish P A H levels.";
-
   function pickVoice(){
     var voices = window.speechSynthesis.getVoices();
     var preferred = ['Google UK English Male','Microsoft David','Daniel','Google US English','Microsoft Mark'];
@@ -17,7 +15,6 @@
         if (voices[i].name.indexOf(preferred[p]) !== -1) return voices[i];
       }
     }
-    // fallback: any English voice
     for (var j = 0; j < voices.length; j++){
       if (/^en/i.test(voices[j].lang)) return voices[j];
     }
@@ -27,27 +24,36 @@
   function speak(text, silent){
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
-    var u = new SpeechSynthesisUtterance(text);
+    // Clean up text for speech: remove newlines, extra spaces
+    var clean = (text || '').replace(/\s+/g, ' ').trim();
+    if (!clean) return;
+    var u = new SpeechSynthesisUtterance(clean);
     u.rate = 0.88;
     u.pitch = 0.75;
     u.volume = silent ? 0 : 1.0;
     var v = pickVoice();
     if (v) u.voice = v;
     window.speechSynthesis.speak(u);
-    if (!silent) console.log('[voice-alert] spoken ·', text);
+    if (!silent) console.log('[voice-alert] spoken ·', clean);
   }
 
-  // Browser unlock: fire a silent utterance on first user gesture
+  function readActionText(){
+    var el = document.getElementById('fsAction');
+    if (!el) return null;
+    var t = (el.textContent || '').trim();
+    if (!t || t === '—' || t.length < 5) return null;
+    return t;
+  }
+
   function unlock(){
     if (unlocked) return;
     unlocked = true;
     try { speak(' ', true); } catch(e){}
-    // second silent ping after voices load
     setTimeout(function(){ try { speak(' ', true); } catch(e){} }, 500);
     console.log('[voice-alert] unlocked by user gesture');
   }
   ['click','touchstart','keydown','mousedown'].forEach(function(ev){
-    document.addEventListener(ev, unlock, { once: false, passive: true });
+    document.addEventListener(ev, unlock, { passive: true });
   });
 
   function ensureToggle(){
@@ -67,10 +73,10 @@
     toggleBtn.addEventListener('click', function(ev){
       ev.stopPropagation();
       unlock();
-      // First click: just unlock + test speak. Subsequent clicks: toggle on/off.
       if (toggleBtn.dataset.tested !== '1'){
         toggleBtn.dataset.tested = '1';
-        setTimeout(function(){ speak(ALERT_TEXT); }, 200);
+        var msg = readActionText() || 'Voice alert test. System ready.';
+        setTimeout(function(){ speak(msg); }, 250);
         return;
       }
       voiceEnabled = !voiceEnabled;
@@ -91,10 +97,11 @@
     ensureToggle();
 
     var risk = (riskEl.textContent || '').trim().toUpperCase();
+    var action = readActionText();
 
-    if ((risk === 'CRITICAL' || risk === 'UNSAFE') && risk !== lastSpokenRisk){
-      if (voiceEnabled && unlocked) speak(ALERT_TEXT);
-      else if (voiceEnabled && !unlocked) console.log('[voice-alert] risk=' + risk + ' but not unlocked yet — click page once');
+    if ((risk === 'CRITICAL' || risk === 'UNSAFE') && risk !== lastSpokenRisk && action){
+      if (voiceEnabled && unlocked) speak(action);
+      else if (voiceEnabled && !unlocked) console.log('[voice-alert] risk=' + risk + ' — click page once to unlock audio');
       lastSpokenRisk = risk;
     } else if (risk === 'SAFE' || risk === 'CAUTION'){
       lastSpokenRisk = risk;
@@ -102,9 +109,9 @@
   }
 
   if (window.speechSynthesis){
-    window.speechSynthesis.onvoiceschanged = function(){ /* pre-load */ };
+    window.speechSynthesis.onvoiceschanged = function(){};
   }
 
   setInterval(check, 3000);
-  console.log('[voice-alert] armed');
+  console.log('[voice-alert] armed — speaks fsAction text');
 })();
