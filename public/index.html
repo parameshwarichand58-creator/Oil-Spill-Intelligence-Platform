@@ -5337,12 +5337,317 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[alert-final] armed — loud siren + natural human voice');
 })();
+</script><script id="loud-siren-v2">
+// LOUD emergency siren + natural human voice — V2
+(function(){
+  if (window.__loudSirenV2) return;
+  window.__loudSirenV2 = true;
+
+  var SCENARIOS = {
+    natural:   { title:'Natural Seepage',   reason:'A natural oil seepage has been detected on the seafloor. No vessel is involved. Environmental monitoring is advised.' },
+    culprit:   { title:'Culprit Theft',     reason:'Illegal ship to ship oil transfer is in progress. The vessel Cargo Gamma has attempted unauthorized discharge. The coast guard has been notified.' },
+    internal:  { title:'Internal Failure',  reason:'A mechanical failure has occurred on Cargo Gamma. Bilge water discharge has been detected. The ships integrity may be compromised.' },
+    collision: { title:'Collision Accident',reason:'Two vessels have collided. There is an active oil spill from a damaged hull. Immediate emergency response is required.' },
+    fire:      { title:'Fire Explosion',    reason:'A fire has been detected on board a tanker. There is a risk of explosion. Full emergency response is now activated.' },
+    weather:   { title:'Weather Storm',     reason:'A severe storm cell is approaching at forty five knots. Hull stress risk is high. All vessels are advised to alter course immediately.' }
+  };
+
+  var audioCtx = null;
+  var siren = null;
+
+  function getCtx(){
+    if (!audioCtx){
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch(e){}
+    }
+    if (audioCtx && audioCtx.state === 'suspended'){
+      audioCtx.resume();
+    }
+    return audioCtx;
+  }
+
+  // ============================================
+  // LOUD 4-LAYER EMERGENCY SIREN
+  // ============================================
+  function startSiren(){
+    var ctx = getCtx();
+    if (!ctx || siren) return;
+
+    var nodes = [];
+
+    // Master output — LOUD
+    var master = ctx.createGain();
+    master.gain.value = 0.85;
+    master.connect(ctx.destination);
+    nodes.push(master);
+
+    // Compressor to maximize volume without distortion
+    try {
+      var comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -12;
+      comp.knee.value = 6;
+      comp.ratio.value = 12;
+      comp.attack.value = 0.003;
+      comp.release.value = 0.15;
+      master.disconnect();
+      master.connect(comp);
+      comp.connect(ctx.destination);
+      nodes.push(comp);
+    } catch(e){}
+
+    // ---- Layer 1: main wail (sawtooth, sweeps 600→1000 slow) ----
+    var osc1 = ctx.createOscillator();
+    osc1.type = 'sawtooth';
+    osc1.frequency.value = 800;
+    var lfo1 = ctx.createOscillator();
+    lfo1.type = 'sine';
+    lfo1.frequency.value = 0.6;
+    var lfoG1 = ctx.createGain();
+    lfoG1.gain.value = 220;
+    lfo1.connect(lfoG1);
+    lfoG1.connect(osc1.frequency);
+    var g1 = ctx.createGain(); g1.gain.value = 0.6;
+    osc1.connect(g1); g1.connect(master);
+    osc1.start(); lfo1.start();
+    nodes.push(osc1, lfo1, lfoG1, g1);
+
+    // ---- Layer 2: high-pitch chirp (square, fast sweep 1300→1700) ----
+    var osc2 = ctx.createOscillator();
+    osc2.type = 'square';
+    osc2.frequency.value = 1500;
+    var lfo2 = ctx.createOscillator();
+    lfo2.type = 'sine';
+    lfo2.frequency.value = 2.4;
+    var lfoG2 = ctx.createGain();
+    lfoG2.gain.value = 180;
+    lfo2.connect(lfoG2);
+    lfoG2.connect(osc2.frequency);
+    var g2 = ctx.createGain(); g2.gain.value = 0.22;
+    osc2.connect(g2); g2.connect(master);
+    osc2.start(); lfo2.start();
+    nodes.push(osc2, lfo2, lfoG2, g2);
+
+    // ---- Layer 3: air-raid mid sweep (triangle, classic "uh-oh") ----
+    var osc3 = ctx.createOscillator();
+    osc3.type = 'triangle';
+    osc3.frequency.value = 500;
+    var lfo3 = ctx.createOscillator();
+    lfo3.type = 'sine';
+    lfo3.frequency.value = 0.9;
+    var lfoG3 = ctx.createGain();
+    lfoG3.gain.value = 300;
+    lfo3.connect(lfoG3);
+    lfoG3.connect(osc3.frequency);
+    var g3 = ctx.createGain(); g3.gain.value = 0.35;
+    osc3.connect(g3); g3.connect(master);
+    osc3.start(); lfo3.start();
+    nodes.push(osc3, lfo3, lfoG3, g3);
+
+    // ---- Layer 4: low rumble for weight (sub bass) ----
+    var osc4 = ctx.createOscillator();
+    osc4.type = 'sine';
+    osc4.frequency.value = 75;
+    var g4 = ctx.createGain(); g4.gain.value = 0.4;
+    osc4.connect(g4); g4.connect(master);
+    osc4.start();
+    nodes.push(osc4, g4);
+
+    // ---- Rhythmic pulses on the master gain for urgency ----
+    var pulseOn = true;
+    var pulseTimer = setInterval(function(){
+      if (!siren) return;
+      var now = ctx.currentTime;
+      master.gain.cancelScheduledValues(now);
+      master.gain.linearRampToValueAtTime(pulseOn ? 0.85 : 0.5, now + 0.3);
+      pulseOn = !pulseOn;
+    }, 380);
+
+    siren = { nodes: nodes, timer: pulseTimer };
+    console.log('[siren] LOUD 4-layer siren active');
+  }
+
+  function stopSiren(){
+    if (!siren) return;
+    try {
+      var ctx = getCtx();
+      var now = ctx ? ctx.currentTime : 0;
+      siren.nodes.forEach(function(n){
+        try {
+          if (n.gain){
+            n.gain.cancelScheduledValues(now);
+            n.gain.linearRampToValueAtTime(0.0001, now + 0.25);
+          }
+        } catch(e){}
+      });
+      clearInterval(siren.timer);
+      setTimeout(function(){
+        if (siren){
+          siren.nodes.forEach(function(n){
+            try { if (n.stop) n.stop(); } catch(e){}
+            try { if (n.disconnect) n.disconnect(); } catch(e){}
+          });
+        }
+        siren = null;
+      }, 300);
+    } catch(e){}
+    console.log('[siren] stopped');
+  }
+
+  // ============================================
+  // NATURAL HUMAN VOICE — careful selection
+  // ============================================
+  function pickNaturalVoice(){
+    var voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+    if (!voices || !voices.length) return null;
+
+    // Priority order — most natural / neural first
+    var priorities = [
+      'Microsoft Aria Online (Natural)',
+      'Microsoft Jenny Online (Natural)',
+      'Microsoft Michelle Online (Natural)',
+      'Microsoft Ana Online (Natural)',
+      'Microsoft Guy Online (Natural)',
+      'Microsoft Davis Online (Natural)',
+      'Microsoft Aria',
+      'Microsoft Jenny',
+      'Google US English',
+      'Google UK English Female',
+      'Google UK English Male',
+      'Samantha',
+      'Karen',
+      'Daniel',
+      'Alex',
+      'Moira',
+      'Tessa',
+      'Rishi',
+      'Microsoft Zira Desktop',
+      'Microsoft David Desktop'
+    ];
+
+    for (var i = 0; i < priorities.length; i++){
+      var match = voices.find(function(v){ return v.name === priorities[i]; });
+      if (match) return match;
+    }
+    // Fallback: any en-US / en-GB
+    var fallback = voices.find(function(v){ return /^en[-_]US/i.test(v.lang); }) ||
+                   voices.find(function(v){ return /^en[-_]GB/i.test(v.lang); }) ||
+                   voices.find(function(v){ return /^en/i.test(v.lang); });
+    return fallback || voices[0];
+  }
+
+  function speakHuman(title, reason, cb){
+    if (!window.speechSynthesis){ if (cb) cb(); return; }
+
+    window.speechSynthesis.cancel();
+
+    var voice = pickNaturalVoice();
+    console.log('[voice] selected:', voice ? voice.name + ' (' + voice.lang + ')' : 'system default');
+
+    function mk(text, isFinal){
+      var u = new SpeechSynthesisUtterance(text);
+      u.voice = voice || undefined;
+      u.rate = 0.98;   // very slight slowdown for clarity
+      u.pitch = 1.0;   // natural human pitch
+      u.volume = 1.0;
+      u.lang = (voice && voice.lang) || 'en-US';
+      if (isFinal && cb) u.onend = cb;
+      return u;
+    }
+
+    var utterances = [
+      mk('Attention. This is an emergency alert.'),
+      mk(title + '.'),
+      mk(reason),
+      mk('Please take immediate action.', true)
+    ];
+
+    utterances.forEach(function(u){ window.speechSynthesis.speak(u); });
+  }
+
+  // ============================================
+  // UPDATE EXISTING showRobot on the page
+  // ============================================
+  function getScenarioKeyFromTitle(){
+    var t = (document.getElementById('roboTitle') || {}).textContent || '';
+    t = t.toLowerCase();
+    if (t.indexOf('natural') >= 0) return 'natural';
+    if (t.indexOf('culprit') >= 0 || t.indexOf('theft') >= 0) return 'culprit';
+    if (t.indexOf('internal') >= 0) return 'internal';
+    if (t.indexOf('collision') >= 0) return 'collision';
+    if (t.indexOf('fire') >= 0) return 'fire';
+    if (t.indexOf('weather') >= 0 || t.indexOf('storm') >= 0) return 'weather';
+    return null;
+  }
+
+  // Hook the scene visibility
+  function hookScene(){
+    var scene = document.getElementById('roboScene');
+    if (!scene) { setTimeout(hookScene, 500); return; }
+    if (scene.dataset.loudHooked) return;
+    scene.dataset.loudHooked = '1';
+
+    var observer = new MutationObserver(function(){
+      var showing = scene.classList.contains('show');
+      if (showing && !scene.dataset.loudActive){
+        scene.dataset.loudActive = '1';
+        var ctx = getCtx();
+        startSiren();
+        setTimeout(function(){
+          var key = getScenarioKeyFromTitle();
+          if (key && SCENARIOS[key]){
+            speakHuman(SCENARIOS[key].title, SCENARIOS[key].reason);
+          }
+        }, 1100);
+      } else if (!showing && scene.dataset.loudActive){
+        scene.dataset.loudActive = '';
+        stopSiren();
+        try { window.speechSynthesis.cancel(); } catch(e){}
+      }
+    });
+    observer.observe(scene, { attributes: true, attributeFilter: ['class'] });
+    console.log('[loud] scene hooked');
+  }
+
+  // Hook stop button
+  function hookStop(){
+    var btn = document.getElementById('roboStop');
+    if (!btn || btn.dataset.loudWired) return;
+    btn.dataset.loudWired = '1';
+    btn.addEventListener('click', function(){
+      stopSiren();
+      try { window.speechSynthesis.cancel(); } catch(e){}
+    });
+  }
+
+  // Unlock audio context on first click
+  document.addEventListener('click', function(){
+    getCtx();
+  }, { once: true });
+
+  // Preload voices
+  if (window.speechSynthesis){
+    window.speechSynthesis.getVoices();
+    window.speechSynthesis.onvoiceschanged = function(){
+      var v = pickNaturalVoice();
+      console.log('[voice] available, using:', v ? v.name : 'none');
+    };
+  }
+
+  hookScene();
+  hookStop();
+  setInterval(hookScene, 2000);
+  setInterval(hookStop, 2000);
+
+  console.log('[loud] armed — LOUD siren + natural voice');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
