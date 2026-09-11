@@ -5139,12 +5139,189 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[robo-dancer] armed — full body robot with dance');
 })();
+</script><script id="robo-sound">
+// Robot voice + beeps + dance music — uses Web Audio API + SpeechSynthesis
+(function(){
+  if (window.__roboSound) return;
+  window.__roboSound = true;
+
+  var audioCtx = null;
+  var beepTimer = null;
+  var humOsc = null;
+  var humGain = null;
+
+  function ensureAudio(){
+    if (audioCtx) return audioCtx;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch(e){
+      console.warn('[robo-sound] Web Audio not available');
+    }
+    return audioCtx;
+  }
+
+  // Short beep — used rhythmically while dancing
+  function beep(freq, dur, type, vol){
+    var ctx = ensureAudio();
+    if (!ctx) return;
+    var o = ctx.createOscillator();
+    var g = ctx.createGain();
+    o.type = type || 'square';
+    o.frequency.value = freq || 800;
+    g.gain.value = 0;
+    o.connect(g);
+    g.connect(ctx.destination);
+    var now = ctx.currentTime;
+    g.gain.linearRampToValueAtTime(vol || 0.08, now + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, now + (dur || 0.08));
+    o.start(now);
+    o.stop(now + (dur || 0.1));
+  }
+
+  // Sweep tone — used as startup sound
+  function sweep(startF, endF, dur){
+    var ctx = ensureAudio();
+    if (!ctx) return;
+    var o = ctx.createOscillator();
+    var g = ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(startF, ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(endF, ctx.currentTime + dur);
+    g.gain.value = 0.06;
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start();
+    o.stop(ctx.currentTime + dur);
+  }
+
+  // Background robot hum while visible
+  function startHum(){
+    var ctx = ensureAudio();
+    if (!ctx || humOsc) return;
+    humOsc = ctx.createOscillator();
+    humGain = ctx.createGain();
+    humOsc.type = 'sine';
+    humOsc.frequency.value = 62; // low hum
+    humGain.gain.value = 0.04;
+    humOsc.connect(humGain);
+    humGain.connect(ctx.destination);
+    humOsc.start();
+  }
+  function stopHum(){
+    try {
+      if (humOsc){ humOsc.stop(); humOsc = null; }
+      if (humGain){ humGain.disconnect(); humGain = null; }
+    } catch(e){}
+  }
+
+  // Rhythmic beeps synchronized with the dance animation (0.85s cycle)
+  function startDanceBeeps(){
+    stopDanceBeeps();
+    var pattern = [880, 660, 990, 740, 880, 660, 990, 660]; // 8 beeps per cycle
+    var i = 0;
+    beepTimer = setInterval(function(){
+      beep(pattern[i % pattern.length], 0.08, 'square', 0.05);
+      i++;
+    }, 106); // 8 * 106ms ≈ 850ms matching roboDance
+  }
+  function stopDanceBeeps(){
+    if (beepTimer){ clearInterval(beepTimer); beepTimer = null; }
+  }
+
+  // Robot voice — pitched up, slow, robotic intonation
+  function robotSpeak(msg){
+    try {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+
+      // Split message into short robot phrases for staccato effect
+      var phrases = msg.match(/[^.!,]+[.!]?/g) || [msg];
+
+      var voices = window.speechSynthesis.getVoices();
+      // Prefer English voices that sound more mechanical
+      var preferred = voices.find(function(v){ return /en-US|en-GB|Google US English/i.test(v.name); }) || voices[0];
+
+      phrases.forEach(function(phrase, idx){
+        var u = new SpeechSynthesisUtterance(phrase.trim());
+        u.rate   = 0.85;   // slower — robot style
+        u.pitch  = 1.6;    // high pitch — robot tone
+        u.volume = 1.0;
+        if (preferred) u.voice = preferred;
+        // Slight stagger between phrases
+        u.onstart = function(){ beep(1200, 0.05, 'square', 0.06); };
+        window.speechSynthesis.speak(u);
+      });
+    } catch(e){}
+  }
+
+  // Hook into the existing robot show
+  var origShow = null;
+  function interceptShow(){
+    // Watch for the roboScene becoming visible
+    var scene = document.getElementById('roboScene');
+    if (!scene) { setTimeout(interceptShow, 500); return; }
+    if (scene.dataset.soundHooked) return;
+    scene.dataset.soundHooked = '1';
+
+    // Use MutationObserver to detect when the scene shows/hides
+    var observer = new MutationObserver(function(muts){
+      muts.forEach(function(m){
+        var showing = scene.classList.contains('show');
+        if (showing && !scene.dataset.soundActive){
+          scene.dataset.soundActive = '1';
+          ensureAudio();
+          if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+          sweep(200, 1200, 0.35);
+          startHum();
+          startDanceBeeps();
+          setTimeout(function(){
+            var msg = document.getElementById('roboMsg');
+            if (msg) robotSpeak(msg.textContent || 'Alert detected');
+          }, 500);
+        } else if (!showing && scene.dataset.soundActive){
+          scene.dataset.soundActive = '';
+          stopHum();
+          stopDanceBeeps();
+          try { window.speechSynthesis.cancel(); } catch(e){}
+        }
+      });
+    });
+    observer.observe(scene, { attributes: true, attributeFilter: ['class'] });
+    console.log('[robo-sound] scene hooked');
+  }
+
+  // Extra: hook the STOP button so it also stops sound
+  function hookStop(){
+    var btn = document.getElementById('roboStop');
+    if (!btn || btn.dataset.soundWired) return;
+    btn.dataset.soundWired = '1';
+    btn.addEventListener('click', function(){
+      stopHum();
+      stopDanceBeeps();
+      try { window.speechSynthesis.cancel(); } catch(e){}
+    });
+  }
+
+  // Pre-load voices (some browsers need this)
+  if (window.speechSynthesis){
+    window.speechSynthesis.onvoiceschanged = function(){};
+    window.speechSynthesis.getVoices();
+  }
+
+  interceptShow();
+  hookStop();
+  setInterval(interceptShow, 2000);
+  setInterval(hookStop, 2000);
+
+  console.log('[robo-sound] armed — voice + beeps + hum');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
