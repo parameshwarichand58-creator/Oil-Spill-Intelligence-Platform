@@ -39,17 +39,17 @@
       '<p>Protected habitats · live threat scoring · response rules per zone</p></div>',
 
       '<div class="btn-group" style="margin-bottom:12px;">',
-        '<button class="btn btn-primary" id="ecoCheck">✅ CHECK STATUS</button>',
-        '<button class="btn btn-success" id="ecoAdd">➕ ADD ZONE</button>',
-        '<button class="btn btn-outline" id="ecoExport">📤 EXPORT JSON</button>',
-        '<button class="btn btn-danger" id="ecoReset">🔄 RESET ZONES</button>',
+        '<button class="btn btn-primary" id="ecoCheck" type="button">✅ CHECK STATUS</button>',
+        '<button class="btn btn-success" id="ecoAdd" type="button">➕ ADD ZONE</button>',
+        '<button class="btn btn-outline" id="ecoExport" type="button">📤 EXPORT JSON</button>',
+        '<button class="btn btn-danger" id="ecoReset" type="button">🔄 RESET ZONES</button>',
       '</div>',
 
       '<div class="btn-group" style="margin-bottom:14px;" id="ecoFilters">',
-        '<button class="btn btn-outline ecoF active" data-f="ALL">ALL</button>',
-        '<button class="btn btn-outline ecoF" data-f="HIGH">HIGH</button>',
-        '<button class="btn btn-outline ecoF" data-f="MEDIUM">MEDIUM</button>',
-        '<button class="btn btn-outline ecoF" data-f="LOW">LOW</button>',
+        '<button class="btn btn-outline ecoF active" data-f="ALL" type="button">ALL</button>',
+        '<button class="btn btn-outline ecoF" data-f="HIGH" type="button">HIGH</button>',
+        '<button class="btn btn-outline ecoF" data-f="MEDIUM" type="button">MEDIUM</button>',
+        '<button class="btn btn-outline ecoF" data-f="LOW" type="button">LOW</button>',
       '</div>',
 
       '<div id="ecoAddForm" style="display:none;background:rgba(0,212,170,0.04);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:12px 14px;margin-bottom:14px;">',
@@ -64,8 +64,8 @@
           '</select>',
         '</div>',
         '<div class="btn-group" style="margin-top:10px;">',
-          '<button class="btn btn-success btn-sm" id="nzSave">SAVE ZONE</button>',
-          '<button class="btn btn-outline btn-sm" id="nzCancel">CANCEL</button>',
+          '<button class="btn btn-success btn-sm" id="nzSave" type="button">SAVE ZONE</button>',
+          '<button class="btn btn-outline btn-sm" id="nzCancel" type="button">CANCEL</button>',
         '</div>',
       '</div>',
 
@@ -74,68 +74,121 @@
       '<div id="ecoSummary" style="font-family:\'Share Tech Mono\',monospace;font-size:10px;color:#c9d8ea;line-height:1.9;"></div></div>'
     ].join('');
     m.appendChild(p);
+    console.log('[eco-zones] page10 created');
+  }
 
-    $('ecoCheck').addEventListener('click', function(){
-      lastScan = new Date().toLocaleTimeString();
-      if(window.speechSynthesis){
-        var u=new SpeechSynthesisUtterance('Ecological zone scan complete.');
-        u.rate=0.9; u.pitch=0.8; window.speechSynthesis.speak(u);
-      }
-      render();
-    });
-
-    $('ecoAdd').addEventListener('click', function(){
-      var f=$('ecoAddForm'); f.style.display = f.style.display==='none'?'block':'none';
-    });
-    $('nzCancel').addEventListener('click', function(){ $('ecoAddForm').style.display='none'; });
-    $('nzSave').addEventListener('click', function(){
-      var n=$('nzName').value.trim() || 'Custom Zone';
-      var z={
-        i: $('nzIcon').value.trim() || '🌊',
-        n: n,
-        loc: $('nzLoc').value.trim() || 'Custom location',
-        rule: $('nzRule').value,
-        th: 'MEDIUM',
-        species: 0,
-        custom: true
+  // Idempotent button wiring — runs every render so buttons ALWAYS work
+  function ensureButtons(){
+    var check=$('ecoCheck');
+    if(check && !check.dataset.wired){
+      check.dataset.wired='1';
+      check.onclick=function(){
+        lastScan=new Date().toLocaleTimeString();
+        try{
+          if(window.speechSynthesis){
+            window.speechSynthesis.cancel();
+            var u=new SpeechSynthesisUtterance('Ecological zone scan complete.');
+            u.rate=0.9; u.pitch=0.8; window.speechSynthesis.speak(u);
+          }
+        }catch(e){}
+        render();
       };
-      zones.push(z); save(zones);
-      $('nzName').value=''; $('nzLoc').value=''; $('ecoAddForm').style.display='none';
-      render();
-    });
+    }
 
-    $('ecoExport').addEventListener('click', function(){
-      var data=JSON.stringify(zones,null,2);
-      var blob=new Blob([data],{type:'application/json'});
-      var url=URL.createObjectURL(blob);
-      var a=document.createElement('a');
-      a.href=url; a.download='eco-zones-'+Date.now()+'.json'; a.click();
-      URL.revokeObjectURL(url);
-    });
+    var add=$('ecoAdd');
+    if(add && !add.dataset.wired){
+      add.dataset.wired='1';
+      add.onclick=function(){
+        var f=$('ecoAddForm');
+        if(f) f.style.display = f.style.display==='none'?'block':'none';
+      };
+    }
 
-    $('ecoReset').addEventListener('click', function(){
-      if(confirm('Reset all zones to defaults?')){
-        zones = DEFAULTS.slice(); save(zones); render();
-      }
-    });
+    var cancel=$('nzCancel');
+    if(cancel && !cancel.dataset.wired){
+      cancel.dataset.wired='1';
+      cancel.onclick=function(){ var f=$('ecoAddForm'); if(f) f.style.display='none'; };
+    }
+
+    var saveBtn=$('nzSave');
+    if(saveBtn && !saveBtn.dataset.wired){
+      saveBtn.dataset.wired='1';
+      saveBtn.onclick=function(){
+        var n=$('nzName').value.trim() || 'Custom Zone';
+        var z={
+          i: $('nzIcon').value.trim() || '🌊',
+          n: n,
+          loc: $('nzLoc').value.trim() || 'Custom location',
+          rule: $('nzRule').value,
+          th: 'MEDIUM',
+          species: 0,
+          custom: true
+        };
+        zones.push(z); save(zones);
+        $('nzName').value=''; $('nzLoc').value='';
+        var f=$('ecoAddForm'); if(f) f.style.display='none';
+        render();
+      };
+    }
+
+    var exp=$('ecoExport');
+    if(exp && !exp.dataset.wired){
+      exp.dataset.wired='1';
+      exp.onclick=function(){
+        var data=JSON.stringify(zones,null,2);
+        var blob=new Blob([data],{type:'application/json'});
+        var url=URL.createObjectURL(blob);
+        var a=document.createElement('a');
+        a.href=url; a.download='eco-zones-'+Date.now()+'.json';
+        document.body.appendChild(a); a.click();
+        setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+      };
+    }
+
+    var reset=$('ecoReset');
+    if(reset && !reset.dataset.wired){
+      reset.dataset.wired='1';
+      reset.onclick=function(){
+        if(confirm('Reset all zones to defaults? This will remove all custom zones.')){
+          zones = DEFAULTS.slice();
+          save(zones);
+          try{ localStorage.removeItem('ecoZones'); localStorage.setItem('ecoZones', JSON.stringify(DEFAULTS)); }catch(e){}
+          // Reset filter to ALL so all defaults are visible
+          filter='ALL';
+          var allBtn=document.querySelector('.ecoF[data-f="ALL"]');
+          document.querySelectorAll('.ecoF').forEach(function(x){x.classList.remove('active');});
+          if(allBtn) allBtn.classList.add('active');
+          render();
+          try{
+            if(window.speechSynthesis){
+              window.speechSynthesis.cancel();
+              var u=new SpeechSynthesisUtterance('Zones reset to defaults.');
+              u.rate=0.9; u.pitch=0.8; window.speechSynthesis.speak(u);
+            }
+          }catch(e){}
+        }
+      };
+    }
 
     document.querySelectorAll('.ecoF').forEach(function(b){
-      b.addEventListener('click', function(){
+      if(b.dataset.wired) return;
+      b.dataset.wired='1';
+      b.onclick=function(){
         document.querySelectorAll('.ecoF').forEach(function(x){ x.classList.remove('active'); });
         b.classList.add('active');
         filter = b.dataset.f;
         render();
-      });
+      };
     });
   }
 
   function render(){
     page();
+    ensureButtons();
+
     var d=density(), r=risk();
-    var km=Math.max(1,Math.round(d/8));
     var dist=Math.max(5,Math.min(150,Math.round(120-(d/2))));
 
-    // Auto-refresh threat level based on distance
     zones.forEach(function(z){
       if(!z.custom){
         z.th = dist<30?'HIGH':dist<50?'MEDIUM':'LOW';
@@ -146,7 +199,7 @@
 
     var g=$('ecoGrid');
     if(g){
-      g.innerHTML = filtered.map(function(z, idx){
+      g.innerHTML = filtered.map(function(z){
         var c = z.th==='HIGH'?'#ef4444':z.th==='MEDIUM'?'#fbbf24':'#00d4aa';
         var realIdx = zones.indexOf(z);
         return '<div class="card" style="position:relative;">'+
@@ -161,28 +214,28 @@
       }).join('') || '<div class="card" style="grid-column:1/-1;text-align:center;color:#64748b;">No zones match filter: '+filter+'</div>';
     }
 
-    // Wire delete buttons
     document.querySelectorAll('.ecoDel').forEach(function(b){
-      b.addEventListener('click', function(e){
+      b.onclick=function(e){
         e.stopPropagation();
         var i=parseInt(b.dataset.idx);
         if(confirm('Remove zone "'+zones[i].n+'"?')){
           zones.splice(i,1); save(zones); render();
         }
-      });
+      };
     });
 
-    // Wire notify buttons
     document.querySelectorAll('.ecoNotify').forEach(function(b){
-      b.addEventListener('click', function(){
+      b.onclick=function(){
         var z=zones[parseInt(b.dataset.idx)];
         var msg='Authority notified for '+z.n+'. Rule: '+z.rule+'.';
-        if(window.speechSynthesis){
-          var u=new SpeechSynthesisUtterance(msg);
-          u.rate=0.9; u.pitch=0.8; window.speechSynthesis.speak(u);
-        }
-        console.log('[eco-zones] notified:', z.n);
-      });
+        try{
+          if(window.speechSynthesis){
+            window.speechSynthesis.cancel();
+            var u=new SpeechSynthesisUtterance(msg);
+            u.rate=0.9; u.pitch=0.8; window.speechSynthesis.speak(u);
+          }
+        }catch(e){}
+      };
     });
 
     var s=$('ecoSummary');
@@ -199,5 +252,5 @@
 
   document.addEventListener('click',function(e){var it=e.target.closest('.nav-item');if(it&&/Eco-Zones/i.test(it.textContent))setTimeout(render,200);},true);
   setTimeout(render,2600); setInterval(render,8000);
-  console.log('[eco-zones] armed — v2 with add/remove/check/export/filter');
+  console.log('[eco-zones] armed — v3 with idempotent button wiring');
 })();
