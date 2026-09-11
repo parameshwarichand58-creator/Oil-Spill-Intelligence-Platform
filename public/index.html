@@ -4620,215 +4620,6 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[sat-metrics] armed — cloud/water/land/quality/risk live');
 })();
-</script><script id="alert-robot-restore">
-// Restore robot avatar + voice alert for all 6 scenarios
-(function(){
-  if (window.__alertRobotRestore) return;
-  window.__alertRobotRestore = true;
-
-  var SCENARIOS = {
-    natural:   { title:'NATURAL SEEPAGE',   msg:'Natural oil seepage detected. No vessel involved. Take environmental action.' },
-    culprit:   { title:'OIL SPILL DETECTED', msg:'Oil spill detected! Cargo Gamma attempted illegal transfer. Coast guard notified.' },
-    internal:  { title:'INTERNAL FAILURE',  msg:'Internal failure on Cargo Gamma. Mechanical breakdown causing discharge.' },
-    collision: { title:'COLLISION ACCIDENT', msg:'Collision detected. Two vessels in contact. Active spill reported.' },
-    fire:      { title:'FIRE EXPLOSION',    msg:'Fire on board tanker. Full emergency response required immediately.' },
-    weather:   { title:'WEATHER STORM',     msg:'Storm cell approaching. Hull stress risk. Vessels advised to alter course.' }
-  };
-
-  // Try to reuse the original startAlert if it exists
-  function useStartAlert(msg){
-    if (typeof window.startAlert === 'function'){
-      try { window.startAlert(msg); return true; } catch(e){}
-    }
-    return false;
-  }
-
-  // Fallback: full robot popup + voice
-  function showRobotAlert(title, msg){
-    // Speech synthesis
-    try {
-      if (window.speechSynthesis){
-        window.speechSynthesis.cancel();
-        var u = new SpeechSynthesisUtterance(msg);
-        u.rate = 0.95;
-        u.pitch = 1.0;
-        u.volume = 1.0;
-        window.speechSynthesis.speak(u);
-      }
-    } catch(e){}
-
-    // Remove any existing popup
-    var old = document.getElementById('robotAlertPopup');
-    if (old) old.remove();
-
-    // Build the popup
-    var popup = document.createElement('div');
-    popup.id = 'robotAlertPopup';
-    popup.style.cssText = 'position:fixed;top:60px;right:24px;z-index:999999;' +
-      'width:360px;background:linear-gradient(135deg,rgba(20,10,10,0.98),rgba(8,14,22,0.98));' +
-      'border:1px solid rgba(255,71,87,0.6);border-left:4px solid #ff4757;border-radius:6px;' +
-      'padding:20px 22px;font-family:\'Share Tech Mono\',monospace;color:#c9d8ea;' +
-      'box-shadow:0 12px 48px rgba(0,0,0,0.7), 0 0 40px rgba(255,71,87,0.2);' +
-      'animation:slideIn 0.35s ease;';
-    popup.innerHTML =
-      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
-        '<div style="font-size:40px;animation:shake 1s ease-in-out infinite;">🤖</div>' +
-        '<div>' +
-          '<div style="font-family:\'Orbitron\',monospace;font-size:14px;color:#ff4757;letter-spacing:0.12em;text-shadow:0 0 12px rgba(255,71,87,0.6);">' + title + '</div>' +
-          '<div style="font-size:9px;color:#94a3b8;letter-spacing:0.1em;margin-top:2px;">AI ROBOT ALERT · LIVE</div>' +
-        '</div>' +
-      '</div>' +
-      '<div style="font-size:11.5px;line-height:1.6;color:#e2e8f0;padding:10px 12px;background:rgba(255,71,87,0.08);border-left:2px solid #ff4757;border-radius:3px;">' +
-        msg +
-      '</div>' +
-      '<div style="display:flex;gap:8px;margin-top:14px;">' +
-        '<div style="flex:1;font-size:9px;color:#ff4757;letter-spacing:0.1em;padding:6px 10px;background:rgba(255,71,87,0.12);border:1px solid rgba(255,71,87,0.4);border-radius:3px;text-align:center;">🔊 SPEAKING</div>' +
-        '<button id="robotAlertStop" style="font-family:\'Share Tech Mono\',monospace;font-size:10px;padding:6px 14px;background:rgba(0,255,157,0.1);color:#00ff9d;border:1px solid rgba(0,255,157,0.45);border-radius:3px;cursor:pointer;letter-spacing:0.1em;">⏹ STOP</button>' +
-      '</div>';
-
-    // Add animations
-    if (!document.getElementById('robot-alert-styles')){
-      var s = document.createElement('style');
-      s.id = 'robot-alert-styles';
-      s.textContent =
-        '@keyframes slideIn{from{transform:translateX(420px);opacity:0}to{transform:translateX(0);opacity:1}}' +
-        '@keyframes shake{0%,100%{transform:rotate(0deg)}25%{transform:rotate(-6deg)}75%{transform:rotate(6deg)}}';
-      document.head.appendChild(s);
-    }
-
-    document.body.appendChild(popup);
-
-    // Stop button
-    var stop = document.getElementById('robotAlertStop');
-    if (stop){
-      stop.addEventListener('click', function(){
-        try { window.speechSynthesis.cancel(); } catch(e){}
-        popup.remove();
-      });
-    }
-
-    // Auto-close after 12 seconds
-    setTimeout(function(){ popup.remove(); }, 12000);
-  }
-
-  // Wire every trigger function
-  function makeTrigger(key){
-    var sc = SCENARIOS[key];
-    return function(){
-      // Try original startAlert (may show robot avatar in existing UI)
-      var handled = useStartAlert(sc.msg);
-      // Always show our popup + voice too
-      showRobotAlert(sc.title, sc.msg);
-      console.log('[robot-alert]', key, '·', sc.title);
-    };
-  }
-
-  // Override all 6
-  window.triggerNaturalAlert   = makeTrigger('natural');
-  window.triggerCulpritAlert   = makeTrigger('culprit');
-  window.triggerInternalAlert  = makeTrigger('internal');
-  window.triggerCollisionAlert = makeTrigger('collision');
-  window.triggerFireAlert      = makeTrigger('fire');
-  window.triggerWeatherAlert   = makeTrigger('weather');
-
-  console.log('[robot-alert] all 6 scenarios wired with robot + voice');
-})();
-</script><script id="direct-card-robot">
-// Direct click binding on all 6 scenario cards — bypasses onclick="..." entirely
-(function(){
-  if (window.__directCardRobot) return;
-  window.__directCardRobot = true;
-
-  var SCENARIOS = {
-    natural:   { title:'NATURAL SEEPAGE',   msg:'Natural oil seepage detected. No vessel involved. Take environmental action.' },
-    culprit:   { title:'OIL SPILL DETECTED', msg:'Oil spill detected! Cargo Gamma attempted illegal transfer. Coast guard notified.' },
-    internal:  { title:'INTERNAL FAILURE',  msg:'Internal failure on Cargo Gamma. Mechanical breakdown causing discharge.' },
-    collision: { title:'COLLISION ACCIDENT', msg:'Collision detected. Two vessels in contact. Active spill reported.' },
-    fire:      { title:'FIRE EXPLOSION',    msg:'Fire on board tanker. Full emergency response required immediately.' },
-    weather:   { title:'WEATHER STORM',     msg:'Storm cell approaching. Hull stress risk. Vessels advised to alter course.' }
-  };
-
-  function speak(msg){
-    try {
-      if (window.speechSynthesis){
-        window.speechSynthesis.cancel();
-        var u = new SpeechSynthesisUtterance(msg);
-        u.rate = 0.95; u.pitch = 1.0; u.volume = 1.0;
-        window.speechSynthesis.speak(u);
-      }
-    } catch(e){}
-  }
-
-  function showPopup(title, msg){
-    var old = document.getElementById('robotAlertPopup');
-    if (old) old.remove();
-
-    var popup = document.createElement('div');
-    popup.id = 'robotAlertPopup';
-    popup.style.cssText = 'position:fixed;top:60px;right:24px;z-index:999999;' +
-      'width:360px;background:linear-gradient(135deg,rgba(20,10,10,0.98),rgba(8,14,22,0.98));' +
-      'border:1px solid rgba(255,71,87,0.6);border-left:4px solid #ff4757;border-radius:6px;' +
-      'padding:20px 22px;font-family:\'Share Tech Mono\',monospace;color:#c9d8ea;' +
-      'box-shadow:0 12px 48px rgba(0,0,0,0.7), 0 0 40px rgba(255,71,87,0.2);';
-    popup.innerHTML =
-      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
-        '<div style="font-size:40px;">🤖</div>' +
-        '<div>' +
-          '<div style="font-family:\'Orbitron\',monospace;font-size:14px;color:#ff4757;letter-spacing:0.12em;">' + title + '</div>' +
-          '<div style="font-size:9px;color:#94a3b8;letter-spacing:0.1em;margin-top:2px;">AI ROBOT ALERT · LIVE</div>' +
-        '</div>' +
-      '</div>' +
-      '<div style="font-size:11.5px;line-height:1.6;color:#e2e8f0;padding:10px 12px;background:rgba(255,71,87,0.08);border-left:2px solid #ff4757;border-radius:3px;">' + msg + '</div>' +
-      '<div style="display:flex;gap:8px;margin-top:14px;">' +
-        '<div style="flex:1;font-size:9px;color:#ff4757;padding:6px 10px;background:rgba(255,71,87,0.12);border:1px solid rgba(255,71,87,0.4);border-radius:3px;text-align:center;">🔊 SPEAKING</div>' +
-        '<button id="robotAlertStop" style="font-family:\'Share Tech Mono\',monospace;font-size:10px;padding:6px 14px;background:rgba(0,255,157,0.1);color:#00ff9d;border:1px solid rgba(0,255,157,0.45);border-radius:3px;cursor:pointer;">⏹ STOP</button>' +
-      '</div>';
-    document.body.appendChild(popup);
-
-    var stop = document.getElementById('robotAlertStop');
-    if (stop) stop.addEventListener('click', function(){
-      try { window.speechSynthesis.cancel(); } catch(e){}
-      popup.remove();
-    });
-    setTimeout(function(){ popup.remove(); }, 12000);
-  }
-
-  function fire(key){
-    var sc = SCENARIOS[key];
-    if (!sc) return;
-    speak(sc.msg);
-    showPopup(sc.title, sc.msg);
-    console.log('[direct-card]', key, '·', sc.title);
-  }
-
-  function wire(){
-    document.querySelectorAll('.alert-scenario').forEach(function(card){
-      if (card.dataset.directWired) return;
-      card.dataset.directWired = '1';
-
-      var key = card.dataset.scenario;
-      if (!key){
-        // Fallback: read from onclick
-        var oc = card.getAttribute('onclick') || '';
-        var m = oc.match(/trigger(\w+)Alert/);
-        if (m) key = m[1].toLowerCase();
-      }
-      if (!key || !SCENARIOS[key]) return;
-
-      card.addEventListener('click', function(e){
-        e.preventDefault();
-        e.stopPropagation();
-        fire(key);
-      }, true);
-    });
-    console.log('[direct-card] wired', document.querySelectorAll('.alert-scenario').length, 'cards');
-  }
-
-  wire();
-  setInterval(wire, 2000);
-
-  console.log('[direct-card] armed');
-})();
 </script><script id="mttr-tracker">
 // MTTR tracker — measures real incident open-to-close time
 (function(){
@@ -4980,12 +4771,381 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[mttr] tracker armed');
 })();
+</script><style id="robo-dancer-css">
+#roboScene {
+  display: none;
+  position: fixed; inset: 0; z-index: 999998;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(4px);
+  align-items: center; justify-content: center;
+}
+#roboScene.show { display: flex; }
+
+#roboStage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: roboPopIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes roboPopIn {
+  0%   { transform: scale(0.2) translateY(80px); opacity: 0; }
+  60%  { transform: scale(1.1) translateY(-10px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); }
+}
+
+#roboBubble {
+  background: rgba(8,14,22,0.98);
+  border: 2px solid #00ff9d;
+  border-radius: 10px;
+  padding: 16px 22px;
+  margin-bottom: 20px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  color: #c9d8ea;
+  max-width: 420px;
+  text-align: center;
+  line-height: 1.6;
+  box-shadow: 0 0 30px rgba(0,255,157,0.3);
+  position: relative;
+}
+#roboBubble::after {
+  content: '';
+  position: absolute;
+  bottom: -12px; left: 50%;
+  transform: translateX(-50%);
+  width: 0; height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 12px solid #00ff9d;
+}
+#roboBubble .b-title {
+  font-family: 'Orbitron', monospace;
+  font-size: 16px;
+  color: #ff4757;
+  letter-spacing: 0.12em;
+  margin-bottom: 8px;
+  text-shadow: 0 0 12px rgba(255,71,87,0.6);
+}
+#roboBubble .b-msg { font-size: 12.5px; color: #e2e8f0; }
+
+#roboBody {
+  position: relative;
+  width: 160px; height: 240px;
+  animation: roboDance 0.85s ease-in-out infinite;
+  transform-origin: center bottom;
+  filter: drop-shadow(0 0 24px rgba(0,255,157,0.4));
+}
+@keyframes roboDance {
+  0%, 100% { transform: rotate(-5deg) translateY(0); }
+  25%      { transform: rotate(0deg) translateY(-8px); }
+  50%      { transform: rotate(5deg) translateY(0); }
+  75%      { transform: rotate(0deg) translateY(-8px); }
+}
+
+/* Head */
+.robo-head {
+  position: absolute;
+  top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 80px; height: 70px;
+  background: linear-gradient(180deg, #2a3d55, #16283c);
+  border: 2px solid #00ff9d;
+  border-radius: 12px;
+  box-shadow: 0 0 16px rgba(0,255,157,0.6), inset 0 0 16px rgba(0,255,157,0.2);
+}
+.robo-antenna {
+  position: absolute;
+  top: -14px; left: 50%;
+  transform: translateX(-50%);
+  width: 4px; height: 14px;
+  background: #00ff9d;
+  border-radius: 2px;
+  box-shadow: 0 0 8px #00ff9d;
+}
+.robo-antenna::after {
+  content: '';
+  position: absolute;
+  top: -8px; left: 50%;
+  transform: translateX(-50%);
+  width: 10px; height: 10px;
+  background: #00ff9d;
+  border-radius: 50%;
+  box-shadow: 0 0 14px #00ff9d, 0 0 24px #00ff9d;
+  animation: roboAntennaPulse 1.2s ease-in-out infinite;
+}
+@keyframes roboAntennaPulse {
+  0%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
+  50%      { opacity: 0.55; transform: translateX(-50%) scale(1.3); }
+}
+.robo-eye {
+  position: absolute;
+  top: 22px;
+  width: 14px; height: 14px;
+  background: #00d4ff;
+  border-radius: 50%;
+  box-shadow: 0 0 12px #00d4ff, 0 0 22px #00d4ff;
+  animation: roboBlink 3.5s infinite;
+}
+.robo-eye.left  { left: 16px; }
+.robo-eye.right { right: 16px; }
+@keyframes roboBlink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  94%           { transform: scaleY(0.1); }
+}
+.robo-mouth {
+  position: absolute;
+  bottom: 12px; left: 50%;
+  transform: translateX(-50%);
+  width: 34px; height: 5px;
+  background: #00ff9d;
+  border-radius: 3px;
+  box-shadow: 0 0 10px #00ff9d;
+  animation: roboTalk 0.35s ease-in-out infinite alternate;
+}
+@keyframes roboTalk {
+  0%   { height: 4px; }
+  100% { height: 12px; border-radius: 6px; }
+}
+
+/* Torso */
+.robo-torso {
+  position: absolute;
+  top: 78px; left: 50%;
+  transform: translateX(-50%);
+  width: 90px; height: 90px;
+  background: linear-gradient(180deg, #2a3d55, #16283c);
+  border: 2px solid #00ff9d;
+  border-radius: 12px;
+  box-shadow: 0 0 16px rgba(0,255,157,0.6), inset 0 0 20px rgba(0,255,157,0.15);
+}
+.robo-chest {
+  position: absolute;
+  top: 24px; left: 50%;
+  transform: translateX(-50%);
+  width: 34px; height: 34px;
+  background: radial-gradient(circle, #00d4ff, #005a7a);
+  border: 2px solid #00d4ff;
+  border-radius: 50%;
+  box-shadow: 0 0 14px #00d4ff, inset 0 0 12px rgba(0,0,0,0.5);
+  animation: roboChest 1.5s ease-in-out infinite;
+}
+@keyframes roboChest {
+  0%, 100% { box-shadow: 0 0 14px #00d4ff, inset 0 0 12px rgba(0,0,0,0.5); }
+  50%      { box-shadow: 0 0 26px #00d4ff, inset 0 0 12px rgba(0,0,0,0.5); }
+}
+
+/* Arms */
+.robo-arm {
+  position: absolute;
+  top: 82px;
+  width: 16px; height: 70px;
+  background: linear-gradient(180deg, #2a3d55, #16283c);
+  border: 2px solid #00ff9d;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0,255,157,0.5);
+  transform-origin: top center;
+}
+.robo-arm.left  { left: 0;  animation: roboWaveLeft 0.7s ease-in-out infinite; }
+.robo-arm.right { right: 0; animation: roboWaveRight 0.7s ease-in-out infinite; }
+@keyframes roboWaveLeft {
+  0%, 100% { transform: rotate(-25deg); }
+  50%      { transform: rotate(35deg); }
+}
+@keyframes roboWaveRight {
+  0%, 100% { transform: rotate(25deg); }
+  50%      { transform: rotate(-35deg); }
+}
+
+/* Legs */
+.robo-leg {
+  position: absolute;
+  bottom: 0;
+  width: 18px; height: 60px;
+  background: linear-gradient(180deg, #2a3d55, #16283c);
+  border: 2px solid #00ff9d;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0,255,157,0.5);
+}
+.robo-leg.left  { left: 42px; animation: roboLegs 0.85s ease-in-out infinite; }
+.robo-leg.right { right: 42px; animation: roboLegs 0.85s ease-in-out infinite reverse; }
+@keyframes roboLegs {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+
+/* Floor shadow */
+#roboShadow {
+  width: 140px; height: 14px;
+  background: radial-gradient(ellipse, rgba(0,255,157,0.55), transparent 70%);
+  margin-top: 8px;
+  animation: roboShadowPulse 0.85s ease-in-out infinite;
+}
+@keyframes roboShadowPulse {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50%      { transform: scale(0.85); opacity: 0.4; }
+}
+
+#roboStop {
+  margin-top: 22px;
+  padding: 10px 26px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  background: rgba(255,71,87,0.15);
+  color: #ff4757;
+  border: 1px solid rgba(255,71,87,0.55);
+  border-radius: 4px;
+  cursor: pointer;
+}
+#roboStop:hover { background: rgba(255,71,87,0.3); box-shadow: 0 0 16px rgba(255,71,87,0.4); }
+</style>
+
+<div id="roboScene">
+  <div id="roboStage">
+    <div id="roboBubble">
+      <div class="b-title" id="roboTitle">—</div>
+      <div class="b-msg" id="roboMsg">—</div>
+    </div>
+    <div id="roboBody">
+      <div class="robo-head">
+        <div class="robo-antenna"></div>
+        <div class="robo-eye left"></div>
+        <div class="robo-eye right"></div>
+        <div class="robo-mouth"></div>
+      </div>
+      <div class="robo-torso"><div class="robo-chest"></div></div>
+      <div class="robo-arm left"></div>
+      <div class="robo-arm right"></div>
+      <div class="robo-leg left"></div>
+      <div class="robo-leg right"></div>
+    </div>
+    <div id="roboShadow"></div>
+    <button id="roboStop">⏹ STOP ALERT</button>
+  </div>
+</div>
+
+<script id="robo-dancer-js">
+(function(){
+  if (window.__roboDancer) return;
+  window.__roboDancer = true;
+
+  var SCENARIOS = {
+    natural:   { title:'NATURAL SEEPAGE',   msg:'Natural oil seepage detected on the seafloor. No vessel involved. Environmental response required.' },
+    culprit:   { title:'OIL SPILL DETECTED', msg:'Illegal ship-to-ship transfer detected. Cargo Gamma attempted oil dumping. Coast guard notified.' },
+    internal:  { title:'INTERNAL FAILURE',  msg:'Mechanical failure on Cargo Gamma. Bilge discharge detected. Immediate inspection required.' },
+    collision: { title:'COLLISION ACCIDENT', msg:'Two vessels in contact. Active spill from damaged hull. Emergency response underway.' },
+    fire:      { title:'FIRE EXPLOSION',    msg:'Tanker fire detected. Explosion risk. Full emergency response required immediately.' },
+    weather:   { title:'WEATHER STORM',     msg:'Storm cell approaching at 45 knots. Hull stress risk. All vessels advised to alter course.' }
+  };
+
+  var total = 0, active = 0, history = [];
+
+  function $(id){ return document.getElementById(id); }
+
+  function logAlert(name, desc){
+    history.unshift({ time: new Date().toTimeString().slice(0,8), name: name, desc: desc });
+    if (history.length > 20) history.pop();
+    var log = $('alertLog');
+    if (!log) return;
+    log.innerHTML = history.map(function(h){
+      return '<div style="display:flex;gap:12px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-family:\'Share Tech Mono\',monospace;font-size:11px;">' +
+        '<span style="color:#5c7286;min-width:70px;">' + h.time + '</span>' +
+        '<span style="color:#00ff9d;min-width:130px;">' + h.name + '</span>' +
+        '<span style="color:#94a3b8;">' + h.desc + '</span></div>';
+    }).join('');
+  }
+
+  function updateStats(name){
+    total++;
+    active++;
+    var t = $('alertTotal'); if (t) t.textContent = total;
+    var l = $('alertLast');  if (l) l.textContent = name;
+    var a = $('alertActive'); if (a) a.textContent = active;
+    logAlert(name, 'Scenario triggered');
+    setTimeout(function(){
+      active = Math.max(0, active - 1);
+      if (a) a.textContent = active;
+    }, 10000);
+  }
+
+  function speak(msg){
+    try {
+      if (window.speechSynthesis){
+        window.speechSynthesis.cancel();
+        var u = new SpeechSynthesisUtterance(msg);
+        u.rate = 0.9; u.pitch = 1.1; u.volume = 1.0;
+        window.speechSynthesis.speak(u);
+      }
+    } catch(e){}
+  }
+
+  function showRobot(key){
+    var sc = SCENARIOS[key];
+    if (!sc) return;
+
+    updateStats(sc.title);
+    speak(sc.msg);
+
+    var scene = $('roboScene');
+    var titleEl = $('roboTitle');
+    var msgEl = $('roboMsg');
+    if (titleEl) titleEl.textContent = sc.title;
+    if (msgEl) msgEl.textContent = sc.msg;
+    if (scene) scene.classList.add('show');
+
+    console.log('[robo-dancer]', key, '·', sc.title);
+
+    clearTimeout(window.__roboCloseTimer);
+    window.__roboCloseTimer = setTimeout(hideRobot, 12000);
+  }
+
+  function hideRobot(){
+    var scene = $('roboScene');
+    if (scene) scene.classList.remove('show');
+    try { window.speechSynthesis.cancel(); } catch(e){}
+  }
+
+  function wire(){
+    document.querySelectorAll('.alert-scenario').forEach(function(card){
+      if (card.dataset.roboWired) return;
+      card.dataset.roboWired = '1';
+      var key = card.dataset.scenario;
+      if (!key){
+        var oc = card.getAttribute('onclick') || '';
+        var m = oc.match(/trigger(\w+)Alert/);
+        if (m) key = m[1].toLowerCase();
+      }
+      if (!key || !SCENARIOS[key]) return;
+      card.addEventListener('click', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        showRobot(key);
+      }, true);
+    });
+  }
+
+  function hookStop(){
+    var btn = $('roboStop');
+    if (!btn || btn.dataset.wired) return;
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', hideRobot);
+  }
+
+  wire();
+  hookStop();
+  setInterval(wire, 2000);
+  setInterval(hookStop, 2000);
+
+  console.log('[robo-dancer] armed — full body robot with dance');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
