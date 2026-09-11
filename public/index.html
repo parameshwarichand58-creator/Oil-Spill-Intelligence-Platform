@@ -4872,9 +4872,14 @@ body.analysis-visible #analysis-pause-btn { display: block; }
     if (mttdEl){
       mttdEl.innerHTML = '0.01<span style="font-size:10px;color:#94a3b8;"> min</span>';
     }
+    if (kpiMttdEl){ kpiMttdEl.textContent = '0.01'; }
+
+    var kpiEl = document.getElementById('kpiMTTR');
+    var kpiMttdEl = document.getElementById('kpiMTTD');
 
     if (incidents.length === 0){
       if (mttrEl) mttrEl.innerHTML = '—<span style="font-size:10px;color:#94a3b8;"> min</span>';
+      if (kpiEl)  kpiEl.textContent = '—';
       if (respEl) respEl.textContent = '—';
       if (minEl)  minEl.textContent = '—';
       if (maxEl)  maxEl.textContent = '—';
@@ -4887,6 +4892,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
     var max = Math.max.apply(null, durs);
 
     if (mttrEl) mttrEl.innerHTML = avg.toFixed(2) + '<span style="font-size:10px;color:#94a3b8;"> min</span>';
+    if (kpiEl)  kpiEl.textContent = avg.toFixed(2);
     if (respEl) respEl.textContent = avg.toFixed(2) + ' min';
     if (minEl)  minEl.textContent = min.toFixed(2) + ' min';
     if (maxEl)  maxEl.textContent = max.toFixed(2) + ' min';
@@ -4980,6 +4986,7 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
 
 <!-- trigger redeploy -->
+
 
 
 
