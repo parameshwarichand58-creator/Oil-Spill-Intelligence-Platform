@@ -5660,12 +5660,124 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[analysis-v4] armed');
 })();
+</script><script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
+<script id="sentinel-tracker">
+// Live Sentinel-1A orbital tracking — real TLE data from Celestrak
+(function(){
+  if (window.__sentinelTracker) return;
+  window.__sentinelTracker = true;
+
+  // Sentinel-1A NORAD catalog number
+  var SENTINEL_NORAD = 39634;
+  // Bay of Bengal AOI center
+  var AOI_LAT = 14, AOI_LON = 86.5;
+  // Degrees of tolerance — satellite considered "in region" if within this box
+  var TOL_LAT = 20, TOL_LON = 30;
+
+  var satrec = null;
+  var lastTleFetch = 0;
+  var tleLifetimeMs = 6 * 60 * 60 * 1000; // refresh every 6 hours
+
+  function setSentinelLabel(text, color){
+    var el = document.getElementById('satSentinel');
+    if (!el) return;
+    el.textContent = text;
+    if (color) el.style.color = color;
+  }
+
+  function setSentinelParent(text, color){
+    var el = document.getElementById('satSentinel');
+    if (!el || !el.parentElement) return;
+    var p = el.parentElement;
+    // The parent looks like: ● Sentinel-1: <span id="satSentinel">Standby</span>
+    // We can recolour the bullet by changing parent's color attribute
+    p.style.color = color || '#fbbf24';
+    p.setAttribute('title', text);
+  }
+
+  async function fetchTLE(){
+    var now = Date.now();
+    if (satrec && (now - lastTleFetch) < tleLifetimeMs) return true;
+    try {
+      var url = 'https://celestrak.org/NORAD/elements/gp.php?CATNR=' + SENTINEL_NORAD + '&FORMAT=JSON';
+      var r = await fetch(url);
+      if (!r.ok){
+        // Try the TLE text endpoint as fallback
+        var r2 = await fetch('https://celestrak.org/NORAD/elements/gp.php?CATNR=' + SENTINEL_NORAD + '&FORMAT=TLE');
+        if (!r2.ok) { console.warn('[sentinel] Celestrak HTTP', r.status); return false; }
+        var txt = await r2.text();
+        var lines = txt.trim().split(/\r?\n/);
+        if (lines.length < 3) return false;
+        satrec = satellite.twoline2satrec(lines[1], lines[2]);
+      } else {
+        var data = await r.json();
+        if (!data || !data[0] || !data[0].TLE_LINE1) return false;
+        satrec = satellite.twoline2satrec(data[0].TLE_LINE1, data[0].TLE_LINE2);
+      }
+      lastTleFetch = now;
+      console.log('[sentinel] TLE loaded');
+      return true;
+    } catch(e){
+      console.warn('[sentinel] TLE fetch failed:', e.message);
+      return false;
+    }
+  }
+
+  function computePosition(){
+    if (!satrec) return null;
+    try {
+      var now = new Date();
+      var posVel = satellite.propagate(satrec, now);
+      if (!posVel || !posVel.position) return null;
+      var gmst = satellite.gstime(now);
+      var geo  = satellite.eciToGeodetic(posVel.position, gmst);
+      return {
+        lat: satellite.degreesLat(geo.latitude),
+        lon: satellite.degreesLong(geo.longitude),
+        alt: geo.height // km
+      };
+    } catch(e){
+      return null;
+    }
+  }
+
+  async function update(){
+    var ok = await fetchTLE();
+    if (!ok){ setSentinelLabel('Offline', '#ff4757'); return; }
+
+    var pos = computePosition();
+    if (!pos){ setSentinelLabel('Standby', '#fbbf24'); return; }
+
+    var dLat = Math.abs(pos.lat - AOI_LAT);
+    var dLon = Math.abs(pos.lon - AOI_LON);
+
+    // Normalize longitude wrap
+    if (dLon > 180) dLon = 360 - dLon;
+
+    if (dLat <= TOL_LAT && dLon <= TOL_LON){
+      setSentinelLabel('Online', '#00d4aa');
+      setSentinelParent('Sentinel-1A in view · ' + pos.lat.toFixed(1) + '°N ' + pos.lon.toFixed(1) + '°E · ' + pos.alt.toFixed(0) + ' km', '#00d4aa');
+      console.log('[sentinel] IN VIEW ·', pos.lat.toFixed(2), pos.lon.toFixed(2), pos.alt.toFixed(0) + 'km');
+    } else {
+      setSentinelLabel('Standby', '#fbbf24');
+      setSentinelParent('Sentinel-1A out of range · ' + pos.lat.toFixed(1) + '°N ' + pos.lon.toFixed(1) + '°E', '#fbbf24');
+      console.log('[sentinel] out of range ·', pos.lat.toFixed(2), pos.lon.toFixed(2));
+    }
+  }
+
+  // Update every 30 seconds
+  update();
+  setInterval(update, 30000);
+
+  console.log('[sentinel] tracker armed — Sentinel-1A live orbital tracking');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
