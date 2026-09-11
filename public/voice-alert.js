@@ -5,28 +5,50 @@
   var lastSpokenRisk = null;
   var voiceEnabled = true;
   var toggleBtn = null;
+  var unlocked = false;
 
   var ALERT_TEXT = "Warning. An oil spill has occurred. The fishing areas must be closed immediately. Food safety teams need to be deployed to test the fish P A H levels.";
 
-  function speak(text){
-    if (!voiceEnabled) return;
+  function pickVoice(){
+    var voices = window.speechSynthesis.getVoices();
+    var preferred = ['Google UK English Male','Microsoft David','Daniel','Google US English','Microsoft Mark'];
+    for (var p = 0; p < preferred.length; p++){
+      for (var i = 0; i < voices.length; i++){
+        if (voices[i].name.indexOf(preferred[p]) !== -1) return voices[i];
+      }
+    }
+    // fallback: any English voice
+    for (var j = 0; j < voices.length; j++){
+      if (/^en/i.test(voices[j].lang)) return voices[j];
+    }
+    return null;
+  }
+
+  function speak(text, silent){
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     var u = new SpeechSynthesisUtterance(text);
     u.rate = 0.88;
     u.pitch = 0.75;
-    u.volume = 1.0;
-    // Try to pick a deeper/robotic voice
-    var voices = window.speechSynthesis.getVoices();
-    for (var i = 0; i < voices.length; i++){
-      if (/Google UK English Male|Daniel|Microsoft David/i.test(voices[i].name)){
-        u.voice = voices[i];
-        break;
-      }
-    }
+    u.volume = silent ? 0 : 1.0;
+    var v = pickVoice();
+    if (v) u.voice = v;
     window.speechSynthesis.speak(u);
-    console.log('[voice-alert] spoken ·', text);
+    if (!silent) console.log('[voice-alert] spoken ·', text);
   }
+
+  // Browser unlock: fire a silent utterance on first user gesture
+  function unlock(){
+    if (unlocked) return;
+    unlocked = true;
+    try { speak(' ', true); } catch(e){}
+    // second silent ping after voices load
+    setTimeout(function(){ try { speak(' ', true); } catch(e){} }, 500);
+    console.log('[voice-alert] unlocked by user gesture');
+  }
+  ['click','touchstart','keydown','mousedown'].forEach(function(ev){
+    document.addEventListener(ev, unlock, { once: false, passive: true });
+  });
 
   function ensureToggle(){
     if (toggleBtn && document.body.contains(toggleBtn)) return;
@@ -41,14 +63,23 @@
       "color:#ff4757;border-radius:3px;cursor:pointer;" +
       "font-family:'Share Tech Mono',monospace;font-size:10px;" +
       "letter-spacing:0.12em;text-transform:uppercase;transition:all 0.2s;";
-    toggleBtn.textContent = '🔊 VOICE ALERT: ON';
-    toggleBtn.addEventListener('click', function(){
+    toggleBtn.textContent = '🔊 VOICE ALERT: ON  (click to test)';
+    toggleBtn.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      unlock();
+      // First click: just unlock + test speak. Subsequent clicks: toggle on/off.
+      if (toggleBtn.dataset.tested !== '1'){
+        toggleBtn.dataset.tested = '1';
+        setTimeout(function(){ speak(ALERT_TEXT); }, 200);
+        return;
+      }
       voiceEnabled = !voiceEnabled;
       if (!voiceEnabled) window.speechSynthesis.cancel();
       toggleBtn.textContent = voiceEnabled ? '🔊 VOICE ALERT: ON' : '🔇 VOICE ALERT: OFF';
       toggleBtn.style.background = voiceEnabled ? 'rgba(255,71,87,0.12)' : 'rgba(92,114,134,0.12)';
       toggleBtn.style.borderColor = voiceEnabled ? 'rgba(255,71,87,0.55)' : 'rgba(92,114,134,0.4)';
       toggleBtn.style.color = voiceEnabled ? '#ff4757' : '#5c7286';
+      if (voiceEnabled) speak('Voice alerts enabled');
     });
     panel.appendChild(toggleBtn);
     console.log('[voice-alert] toggle added');
@@ -61,19 +92,17 @@
 
     var risk = (riskEl.textContent || '').trim().toUpperCase();
 
-    // Trigger only when crossing into UNSAFE or CRITICAL from a different state
     if ((risk === 'CRITICAL' || risk === 'UNSAFE') && risk !== lastSpokenRisk){
-      if (voiceEnabled) speak(ALERT_TEXT);
+      if (voiceEnabled && unlocked) speak(ALERT_TEXT);
+      else if (voiceEnabled && !unlocked) console.log('[voice-alert] risk=' + risk + ' but not unlocked yet — click page once');
       lastSpokenRisk = risk;
-      console.log('[voice-alert] triggered ·', risk);
     } else if (risk === 'SAFE' || risk === 'CAUTION'){
       lastSpokenRisk = risk;
     }
   }
 
-  // Voices may load async
   if (window.speechSynthesis){
-    window.speechSynthesis.onvoiceschanged = function(){ /* pre-load voices */ };
+    window.speechSynthesis.onvoiceschanged = function(){ /* pre-load */ };
   }
 
   setInterval(check, 3000);
