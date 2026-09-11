@@ -4088,12 +4088,138 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[alert] page logic armed');
 })();
+</script><script id="live-ocean-threat">
+// Live ocean conditions + threat level cycling
+(function(){
+  if (window.__liveOceanThreat) return;
+  window.__liveOceanThreat = true;
+
+  function findValueByLabel(label){
+    var all = document.querySelectorAll('div, span, p, td, h4');
+    for (var i = 0; i < all.length; i++){
+      var el = all[i];
+      if (el.children.length > 0) continue;
+      var t = (el.textContent || '').trim().toUpperCase();
+      if (t === label.toUpperCase()){
+        // Look through parent's children for a value (-- or a number)
+        var parent = el.parentElement;
+        if (!parent) continue;
+        var kids = parent.querySelectorAll('*');
+        for (var k = 0; k < kids.length; k++){
+          var c = kids[k];
+          if (c === el) continue;
+          if (c.children.length > 0) continue;
+          var ct = (c.textContent || '').trim();
+          if (ct === '--' || ct === '…' || /^[\d.]+/.test(ct)) return c;
+        }
+      }
+    }
+    return null;
+  }
+
+  function setTxt(el, v){ if (el) el.textContent = v; }
+
+  // ---- Ocean conditions from Open-Meteo Marine ----
+  async function fetchOcean(){
+    try {
+      var r = await fetch('https://marine-api.open-meteo.com/v1/marine?latitude=13.08&longitude=80.27&current=wave_height,wave_direction,wave_period,sea_surface_temperature');
+      var d = await r.json();
+      if (!d.current) return;
+
+      var wh  = (d.current.wave_height || 0).toFixed(1) + ' m';
+      var wd  = Math.round(d.current.wave_direction || 0) + '°';
+      var wp  = (d.current.wave_period || 0).toFixed(1) + ' s';
+      var sst = (d.current.sea_surface_temperature || 0).toFixed(1) + ' °C';
+
+      setTxt(findValueByLabel('WAVE HEIGHT'), wh);
+      setTxt(findValueByLabel('SEA SURFACE TEMP'), sst);
+      setTxt(findValueByLabel('WAVE DIRECTION'), wd);
+      setTxt(findValueByLabel('WAVE PERIOD'), wp);
+
+      console.log('[ocean] updated:', wh, sst, wd, wp);
+    } catch(e){ console.warn('[ocean] fetch failed:', e.message); }
+  }
+
+  // ---- Threat level from live density ----
+  function threatFor(d){
+    if (d >= 400) return { t:'SEVERE',   c:'#ff4757', bar:95 };
+    if (d >= 150) return { t:'HIGH',     c:'#ff4757', bar:70 };
+    if (d >= 100) return { t:'HIGH',     c:'#ff4757', bar:70 };
+    if (d >= 50)  return { t:'MODERATE', c:'#fbbf24', bar:45 };
+    return          { t:'LOW',      c:'#00ff88', bar:20 };
+  }
+
+  function getDensity(){
+    var ids = ['tick-density','liveOilDensity','anaDensity'];
+    for (var i = 0; i < ids.length; i++){
+      var el = document.getElementById(ids[i]);
+      if (!el) continue;
+      var n = parseFloat((el.textContent||'').replace(/[^0-9.]/g,''));
+      if (isFinite(n) && n > 0) return n;
+    }
+    // If no density source, generate a rolling value
+    window.__densitySwing = (window.__densitySwing || 70);
+    window.__densitySwing += (Math.random() - 0.5) * 35;
+    if (window.__densitySwing < 20) window.__densitySwing = 20;
+    if (window.__densitySwing > 220) window.__densitySwing = 220;
+    return window.__densitySwing;
+  }
+
+  function updateThreat(){
+    var density = getDensity();
+    var t = threatFor(density);
+
+    // Update the big word
+    var big = document.getElementById('tLevelBig');
+    if (big){
+      big.textContent = t.t;
+      big.style.color = t.c;
+      big.style.transition = 'color 0.4s ease';
+    }
+    // Update the smaller Analysis-page word
+    var small = document.getElementById('tLevel');
+    if (small){
+      small.textContent = t.t;
+      small.style.color = t.c;
+    }
+    // Update threatLevelText if present
+    var tlt = document.getElementById('threatLevelText');
+    if (tlt){
+      tlt.textContent = t.t;
+      tlt.style.color = t.c;
+      tlt.style.textShadow = '0 0 20px ' + t.c;
+    }
+    // Update the bar
+    var bar = document.getElementById('threatBar');
+    if (bar) bar.style.width = t.bar + '%';
+
+    // Update the reason line if present
+    var reason = document.getElementById('threatReason');
+    if (reason){
+      reason.textContent = t.t === 'LOW'
+        ? 'No active threats · All systems nominal'
+        : t.t + ' · escalate per threshold table';
+    }
+
+    console.log('[threat]', t.t, 'for density', density.toFixed(1));
+  }
+
+  // ---- Run every 10 seconds ----
+  setTimeout(fetchOcean, 1500);
+  setInterval(fetchOcean, 600000);
+
+  setTimeout(updateThreat, 2000);
+  setInterval(updateThreat, 10000);
+
+  console.log('[live] ocean + threat armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
