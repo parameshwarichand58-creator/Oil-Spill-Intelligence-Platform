@@ -11,18 +11,14 @@
     weather:{t:"Weather Storm",r:"A severe storm cell is approaching at forty five knots. Hull stress risk is high. All vessels are advised to alter course immediately."}
   };
 
-  // ---------- KILL THE OLD ROBOT VOICE ----------
-  // The original code calls startAlert() which does a robotic speech.
-  // Override it to do nothing so only our human voice plays.
-  window.startAlert = function(){ console.log("[killed] old startAlert suppressed"); };
-  // Also kill any other common robot voice function names
+  // Kill the old robot voice
+  window.startAlert = function(){};
   window.speakRobot = function(){};
   window.robotSpeak = function(){};
-
-  // Stop any currently-running old robot voice on page load
   try { window.speechSynthesis.cancel(); } catch(e){}
 
-  var ctx = null, timer = null, running = false;
+  var ctx = null;
+  var siren = null;
 
   function getCtx(){
     if(!ctx){try{ctx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}
@@ -30,45 +26,124 @@
     return ctx;
   }
 
-  function beep(){
-    var c = getCtx(); if(!c) return;
-    var o = c.createOscillator();
-    var g = c.createGain();
-    o.type = "triangle";
-    o.frequency.value = 2100;
-    g.gain.value = 0;
-    o.connect(g); g.connect(c.destination);
-    var n = c.currentTime;
-    g.gain.linearRampToValueAtTime(0.5, n + 0.008);
-    g.gain.setValueAtTime(0.5, n + 0.10);
-    g.gain.linearRampToValueAtTime(0.001, n + 0.13);
-    o.start(n); o.stop(n + 0.15);
+  // ============================================
+  // HIGH-SECURITY EMERGENCY SIREN
+  // Wailing air-raid style — sweeping 600-1100 Hz
+  // Two layered oscillators for depth + a pulsing LFO
+  // ============================================
+  function startSiren(){
+    var c = getCtx(); if(!c || siren) return;
+
+    var nodes = [];
+
+    // Master gain — LOUD
+    var master = c.createGain();
+    master.gain.value = 0.75;
+    master.connect(c.destination);
+    nodes.push(master);
+
+    // Compressor for punch without distortion
+    try {
+      var comp = c.createDynamicsCompressor();
+      comp.threshold.value = -12;
+      comp.knee.value = 8;
+      comp.ratio.value = 12;
+      comp.attack.value = 0.004;
+      comp.release.value = 0.14;
+      master.disconnect();
+      master.connect(comp);
+      comp.connect(c.destination);
+      nodes.push(comp);
+    } catch(e){}
+
+    // ---- Layer 1: main wail (sawtooth, sweeps 700-1050 slowly) ----
+    var o1 = c.createOscillator();
+    o1.type = "sawtooth";
+    o1.frequency.value = 875;
+    var lfo1 = c.createOscillator();
+    lfo1.type = "sine";
+    lfo1.frequency.value = 0.75;    // 0.75 wails per second
+    var lfoG1 = c.createGain();
+    lfoG1.gain.value = 175;         // sweeps ±175 Hz
+    lfo1.connect(lfoG1);
+    lfoG1.connect(o1.frequency);
+    var g1 = c.createGain(); g1.gain.value = 0.5;
+    o1.connect(g1); g1.connect(master);
+    o1.start(); lfo1.start();
+    nodes.push(o1, lfo1, lfoG1, g1);
+
+    // ---- Layer 2: high accent (triangle, sweeps 1400-1750 quickly) ----
+    var o2 = c.createOscillator();
+    o2.type = "triangle";
+    o2.frequency.value = 1575;
+    var lfo2 = c.createOscillator();
+    lfo2.type = "sine";
+    lfo2.frequency.value = 1.5;    // fast chirp under the main wail
+    var lfoG2 = c.createGain();
+    lfoG2.gain.value = 150;
+    lfo2.connect(lfoG2);
+    lfoG2.connect(o2.frequency);
+    var g2 = c.createGain(); g2.gain.value = 0.28;
+    o2.connect(g2); g2.connect(master);
+    o2.start(); lfo2.start();
+    nodes.push(o2, lfo2, lfoG2, g2);
+
+    // ---- Layer 3: low rumble for weight ----
+    var o3 = c.createOscillator();
+    o3.type = "sine";
+    o3.frequency.value = 95;
+    var g3 = c.createGain(); g3.gain.value = 0.32;
+    o3.connect(g3); g3.connect(master);
+    o3.start();
+    nodes.push(o3, g3);
+
+    // ---- Pulse the master gain — makes the siren sound like it is "breathing" ----
+    var pulse = true;
+    var pulseTimer = setInterval(function(){
+      if(!siren) return;
+      var n = c.currentTime;
+      master.gain.cancelScheduledValues(n);
+      master.gain.linearRampToValueAtTime(pulse ? 0.75 : 0.4, n + 0.25);
+      pulse = !pulse;
+    }, 380);
+
+    siren = { nodes: nodes, pulseTimer: pulseTimer };
+    console.log("[siren] HIGH-SECURITY emergency siren started");
   }
 
-  function startAlarm(){
-    if(running) return;
-    running = true; getCtx();
-    function cycle(){
-      if(!running) return;
-      beep();
-      setTimeout(function(){ if(running) beep(); }, 200);
-      timer = setTimeout(cycle, 620);
-    }
-    cycle();
+  function stopSiren(){
+    if(!siren) return;
+    try {
+      var c = getCtx();
+      var n = c ? c.currentTime : 0;
+      siren.nodes.forEach(function(x){
+        try {
+          if(x.gain){
+            x.gain.cancelScheduledValues(n);
+            x.gain.linearRampToValueAtTime(0.0001, n + 0.25);
+          }
+        } catch(e){}
+      });
+      clearInterval(siren.pulseTimer);
+      var nodes = siren.nodes;
+      siren = null;
+      setTimeout(function(){
+        nodes.forEach(function(x){
+          try { if(x.stop) x.stop(); } catch(e){}
+          try { if(x.disconnect) x.disconnect(); } catch(e){}
+        });
+      }, 300);
+    } catch(e){}
+    console.log("[siren] stopped");
   }
 
-  function stopAlarm(){
-    running = false;
-    if(timer){clearTimeout(timer);timer=null;}
-  }
-
-  // ---------- HUMAN LADY VOICE ----------
+  // ============================================
+  // HUMAN LADY VOICE (unchanged)
+  // ============================================
   function pickLadyVoice(){
     if(!window.speechSynthesis) return null;
     var v = window.speechSynthesis.getVoices();
     if(!v || !v.length) return null;
-
-    // ONLY female voices
     var order = [
       "Microsoft Aria Online (Natural)",
       "Microsoft Jenny Online (Natural)",
@@ -90,24 +165,21 @@
       var m = v.find(function(x){ return x.name === order[i]; });
       if(m) return m;
     }
-    // Any female voice
     var f = v.find(function(x){
       return /(aria|jenny|michelle|ana|zira|samantha|karen|moira|tessa|victoria|allison|ava|female)/i.test(x.name) && /^en/i.test(x.lang);
     });
     if(f) return f;
-    // Last resort: any en-US voice
     return v.find(function(x){ return /^en[-_]US/i.test(x.lang); }) || v[0];
   }
 
-  // Human pitch, human rate. No robot effect.
   function say(text, voice){
     return new Promise(function(res){
       var u = new SpeechSynthesisUtterance(text);
       if(voice){ u.voice = voice; u.lang = voice.lang || "en-US"; }
-      u.rate   = 1.0;    // natural speed
-      u.pitch  = 1.0;    // natural pitch
-      u.volume = 1.0;    // full volume
-      u.onend  = res;
+      u.rate = 1.0;
+      u.pitch = 1.0;
+      u.volume = 1.0;
+      u.onend = res;
       u.onerror = res;
       window.speechSynthesis.speak(u);
     });
@@ -123,12 +195,9 @@
   async function speak(title, reason){
     if(!window.speechSynthesis) return;
     try{ window.speechSynthesis.cancel(); }catch(e){}
-
     var voice = pickLadyVoice();
     console.log("[lady] voice:", voice ? voice.name : "default");
-
     freeze(true);
-
     var lines = [
       "Attention. This is an emergency alert.",
       title + ".",
@@ -139,7 +208,6 @@
       await say(lines[i], voice);
       await new Promise(function(r){ setTimeout(r, 300); });
     }
-
     freeze(false);
   }
 
@@ -164,23 +232,16 @@
       var showing = s.classList.contains("show");
       if(showing && !s.dataset.secActive){
         s.dataset.secActive = "1";
-
-        // Kill any robot voice the old code may have started
         try{ window.speechSynthesis.cancel(); }catch(e){}
-
         getCtx();
-        startAlarm();
-
-        // Lady voice starts IMMEDIATELY — 150ms after scene opens,
-        // so it plays DURING the alarm, not after
+        startSiren();
         setTimeout(function(){
           var k = getKey();
           if(k && SCEN[k]) speak(SCEN[k].t, SCEN[k].r);
-        }, 150);
-
+        }, 300);
       } else if(!showing && s.dataset.secActive){
         s.dataset.secActive = "";
-        stopAlarm();
+        stopSiren();
         try{ window.speechSynthesis.cancel(); }catch(e){}
         freeze(false);
       }
@@ -194,7 +255,7 @@
     if(!b || b.dataset.secWired) return;
     b.dataset.secWired = "1";
     b.addEventListener("click", function(){
-      stopAlarm();
+      stopSiren();
       try{ window.speechSynthesis.cancel(); }catch(e){}
       freeze(false);
     });
@@ -215,5 +276,5 @@
   setInterval(hookScene, 2000);
   setInterval(hookStop, 2000);
 
-  console.log("[alarm] armed — no robot voice, only lady voice + alarm");
+  console.log("[alarm] armed — HIGH-SECURITY siren + lady voice");
 })();
