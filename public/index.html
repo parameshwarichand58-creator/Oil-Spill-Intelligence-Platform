@@ -519,7 +519,7 @@
                 </div>
 
                 <div style="position:relative;">
-                    <img id="satLiveImage" alt="Live satellite" style="display:block;width:100%;height:420px;object-fit:cover;transition:opacity 0.5s ease;"/>
+                    <img id="satLiveImage" alt="Live satellite" style="display:block;width:100%;height:520px;object-fit:cover;transition:opacity 0.5s ease;"/>
                     <div id="satLiveOverlay" style="position:absolute;top:12px;left:12px;background:rgba(8,14,22,0.9);border:1px solid rgba(0,255,157,0.4);border-radius:3px;padding:5px 10px;font-family:'Share Tech Mono',monospace;font-size:9px;color:#00ff9d;letter-spacing:0.1em;backdrop-filter:blur(6px);">
                         ● LIVE · <span id="satLiveLayerName">MODIS TERRA</span>
                     </div>
@@ -576,24 +576,37 @@
                 <div class="data-line"><span class="key">CONFIDENCE:</span><span class="value" id="rawConf">0%</span></div>
             </div>
         </div>
-        <div class="grid-3" style="margin-top:12px;">
-            <div class="card">
-                <div class="card-title"><i class="fas fa-radio"></i> <span id="aisTitle">AIS Data</span></div>
-                <div style="font-size:12px;color:#94a3b8;"><span id="activeShips">Active Ships</span>: <span id="aisShips">12</span></div>
-                <div style="font-size:12px;color:#94a3b8;"><span id="suspiciousLabel">Suspicious</span>: <span id="aisSuspicious">2</span></div>
+        
+    
+        <div id="sat-real-metrics" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px;">
+            <div class="card" style="padding:14px;">
+                <div class="card-title" style="margin-bottom:10px;">📊 Scan Metrics</div>
+                <div style="font-size:11px;color:#94a3b8;line-height:1.9;">
+                    <div style="display:flex;justify-content:space-between;"><span>Cloud Coverage</span><span id="satMetricCloud" style="color:#fff;font-family:'Orbitron',monospace;">--</span></div>
+                    <div style="display:flex;justify-content:space-between;"><span>Water Coverage</span><span id="satMetricWater" style="color:#4a9eff;font-family:'Orbitron',monospace;">--</span></div>
+                    <div style="display:flex;justify-content:space-between;"><span>Land Coverage</span><span id="satMetricLand" style="color:#00d4aa;font-family:'Orbitron',monospace;">--</span></div>
+                    <div style="display:flex;justify-content:space-between;"><span>Image Quality</span><span id="satMetricQuality" style="color:#fbbf24;font-family:'Orbitron',monospace;">--</span></div>
+                </div>
             </div>
-            <div class="card">
-                <div class="card-title"><i class="fas fa-microscope"></i> <span id="triboTitle">Triboelectric</span></div>
-                <div style="font-size:12px;color:#94a3b8;"><span id="triboStatusLabel">Status</span>: <span style="color:#00d4aa;" id="triboStatus">● Online</span></div>
-                <div style="font-size:12px;color:#94a3b8;"><span id="triboSens">Sensitivity</span>: <span id="triboSensVal">High</span></div>
+            <div class="card" style="padding:14px;">
+                <div class="card-title" style="margin-bottom:10px;">🛰 Satellite Pass</div>
+                <div style="font-size:11px;color:#94a3b8;line-height:1.9;">
+                    <div style="display:flex;justify-content:space-between;"><span>Sensor</span><span style="color:#fff;">MODIS Terra</span></div>
+                    <div style="display:flex;justify-content:space-between;"><span>Resolution</span><span style="color:#fff;">250 m/px</span></div>
+                    <div style="display:flex;justify-content:space-between;"><span>Bands</span><span style="color:#fff;">Red + NIR</span></div>
+                    <div style="display:flex;justify-content:space-between;"><span>Last Capture</span><span id="satPassTime" style="color:#00ff9d;font-family:'Orbitron',monospace;">--</span></div>
+                </div>
             </div>
-            <div class="card">
-                <div class="card-title"><i class="fas fa-drone"></i> <span id="uavTitle">UAV Status</span></div>
-                <div style="font-size:12px;color:#94a3b8;"><span id="uavDrones">Drones</span>: <span id="uavCount">3</span> <span id="uavActive">Active</span></div>
-                <div style="font-size:12px;color:#94a3b8;"><span id="uavCoverLabel">Coverage</span>: <span id="uavCoverage">85%</span></div>
+            <div class="card" style="padding:14px;">
+                <div class="card-title" style="margin-bottom:10px;">⚠ Live Detection</div>
+                <div style="font-size:11px;color:#94a3b8;line-height:1.9;">
+                    <div style="display:flex;justify-content:space-between;"><span>Risk Score</span><span id="satRisk" style="color:#fff;font-family:'Orbitron',monospace;">--</span></div>
+                    <div style="display:flex;justify-content:space-between;"><span>Confidence</span><span id="satConf" style="color:#00ff9d;font-family:'Orbitron',monospace;">--</span></div>
+                    <div style="display:flex;justify-content:space-between;"><span>Anomalies</span><span id="satAnomaly" style="color:#fbbf24;font-family:'Orbitron',monospace;">--</span></div>
+                    <div style="display:flex;justify-content:space-between;"><span>Analyzed</span><span id="satAnalyzeTime" style="color:#fff;font-family:'Orbitron',monospace;">--</span></div>
+                </div>
             </div>
-        </div>
-    </div>
+        </div></div>
 
     <!-- PAGE 4: ALERT -->
     <style id="alert-page-pro">
@@ -4590,12 +4603,134 @@ body.analysis-visible #analysis-pause-btn { display: block; }
   setInterval(wire, 2000);
   console.log('[sat-live-v2] armed');
 })();
+</script><script id="sat-real-metrics-logic">
+(function(){
+  if (window.__satRealMetrics) return;
+  window.__satRealMetrics = true;
+
+  function $(id){ return document.getElementById(id); }
+
+  // Compute metrics from the satellite <img>
+  function computeMetrics(){
+    var img = $('satLiveImage');
+    if (!img || !img.complete || !img.naturalWidth) return;
+
+    try {
+      var c = document.createElement('canvas');
+      c.width = 200;
+      c.height = 100;
+      var ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, 200, 100);
+      var data = ctx.getImageData(0, 0, 200, 100).data;
+
+      var total = 200 * 100;
+      var cloud = 0, water = 0, land = 0, sumLum = 0, sumLum2 = 0;
+
+      for (var i = 0; i < data.length; i += 4){
+        var r = data[i], g = data[i+1], b = data[i+2];
+        var lum = r * 0.299 + g * 0.587 + b * 0.114;
+        sumLum += lum;
+        sumLum2 += lum * lum;
+        var mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+
+        if (lum > 225 && (mx - mn) < 20) cloud++;
+        else if (b > 80 && b > r * 1.05) water++;
+        else if (g > r * 0.85 && g > b * 1.05 && lum > 40) land++;
+      }
+
+      var cloudPct = (cloud / total * 100);
+      var waterPct = (water / total * 100);
+      var landPct  = (land / total * 100);
+      var avgLum = sumLum / total;
+      var variance = (sumLum2 / total) - (avgLum * avgLum);
+      var quality = Math.max(0, Math.min(100, 100 - Math.sqrt(variance) / 2));
+
+      // Update panel
+      var elC = $('satMetricCloud'); if (elC) elC.textContent = cloudPct.toFixed(1) + '%';
+      var elW = $('satMetricWater'); if (elW) elW.textContent = waterPct.toFixed(1) + '%';
+      var elL = $('satMetricLand');  if (elL) elL.textContent = landPct.toFixed(1) + '%';
+      var elQ = $('satMetricQuality'); if (elQ) elQ.textContent = quality.toFixed(0) + '/100';
+
+      var elP = $('satPassTime');
+      if (elP){
+        var d = $('satLiveDate');
+        elP.textContent = d ? d.textContent : '--';
+      }
+
+      // Derive risk/anomalies from cloud + water ratio
+      var risk = Math.min(95, Math.round(waterPct * 0.7 + cloudPct * 0.3));
+      var conf = Math.min(98, Math.round(quality * 0.6 + waterPct * 0.4));
+      var anom = waterPct > 25 && cloudPct < 60 ? Math.max(1, Math.round(waterPct / 20)) : 0;
+
+      var elR = $('satRisk'); if (elR){
+        elR.textContent = risk + '/100';
+        elR.style.color = risk > 60 ? '#ff4757' : risk > 35 ? '#fbbf24' : '#00ff9d';
+      }
+      var elCf = $('satConf'); if (elCf) elCf.textContent = conf + '%';
+      var elA = $('satAnomaly'); if (elA) elA.textContent = anom;
+      var elAt = $('satAnalyzeTime');
+      if (elAt) elAt.textContent = new Date().toTimeString().slice(0, 8);
+
+      console.log('[sat-metrics] cloud=' + cloudPct.toFixed(1) + '% water=' + waterPct.toFixed(1) + '% land=' + landPct.toFixed(1) + '% q=' + quality.toFixed(0));
+    } catch(e){
+      // Cross-origin or canvas issue — silent
+    }
+  }
+
+  // Recompute metrics every time a new satellite frame loads
+  function hookImage(){
+    var img = $('satLiveImage');
+    if (!img) { setTimeout(hookImage, 500); return; }
+    if (img.dataset.metricsHooked) return;
+    img.dataset.metricsHooked = '1';
+    img.addEventListener('load', function(){
+      setTimeout(computeMetrics, 200);
+    });
+    // Initial run
+    if (img.complete && img.naturalWidth) setTimeout(computeMetrics, 500);
+    console.log('[sat-metrics] image hooked');
+  }
+  hookImage();
+
+  // Also recompute periodically
+  setInterval(computeMetrics, 6000);
+
+  // ---- Protect live image from being hidden during scan ----
+  // If any code hides the sat-live-viewer, bring it back
+  function guardViewer(){
+    var viewer = $('sat-live-viewer');
+    if (!viewer) return;
+    if (viewer.style.display === 'none'){
+      viewer.style.display = '';
+      viewer.style.visibility = '';
+      console.log('[sat-guard] viewer was hidden — restored');
+    }
+    // Also ensure the image is visible
+    var img = $('satLiveImage');
+    if (img && img.style.display === 'none') img.style.display = 'block';
+  }
+  setInterval(guardViewer, 800);
+
+  // Re-run metrics when user clicks Start Scan
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    var txt = (btn.textContent || '').trim().toLowerCase();
+    if (txt.indexOf('start scan') >= 0 || txt.indexOf('reset') >= 0){
+      setTimeout(computeMetrics, 600);
+      setTimeout(computeMetrics, 1600);
+    }
+  }, true);
+
+  console.log('[sat-metrics] armed — cloud/water/land/quality/risk live');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
