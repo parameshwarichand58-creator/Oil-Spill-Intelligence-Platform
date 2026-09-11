@@ -4733,12 +4733,109 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[robot-alert] all 6 scenarios wired with robot + voice');
 })();
+</script><script id="direct-card-robot">
+// Direct click binding on all 6 scenario cards — bypasses onclick="..." entirely
+(function(){
+  if (window.__directCardRobot) return;
+  window.__directCardRobot = true;
+
+  var SCENARIOS = {
+    natural:   { title:'NATURAL SEEPAGE',   msg:'Natural oil seepage detected. No vessel involved. Take environmental action.' },
+    culprit:   { title:'OIL SPILL DETECTED', msg:'Oil spill detected! Cargo Gamma attempted illegal transfer. Coast guard notified.' },
+    internal:  { title:'INTERNAL FAILURE',  msg:'Internal failure on Cargo Gamma. Mechanical breakdown causing discharge.' },
+    collision: { title:'COLLISION ACCIDENT', msg:'Collision detected. Two vessels in contact. Active spill reported.' },
+    fire:      { title:'FIRE EXPLOSION',    msg:'Fire on board tanker. Full emergency response required immediately.' },
+    weather:   { title:'WEATHER STORM',     msg:'Storm cell approaching. Hull stress risk. Vessels advised to alter course.' }
+  };
+
+  function speak(msg){
+    try {
+      if (window.speechSynthesis){
+        window.speechSynthesis.cancel();
+        var u = new SpeechSynthesisUtterance(msg);
+        u.rate = 0.95; u.pitch = 1.0; u.volume = 1.0;
+        window.speechSynthesis.speak(u);
+      }
+    } catch(e){}
+  }
+
+  function showPopup(title, msg){
+    var old = document.getElementById('robotAlertPopup');
+    if (old) old.remove();
+
+    var popup = document.createElement('div');
+    popup.id = 'robotAlertPopup';
+    popup.style.cssText = 'position:fixed;top:60px;right:24px;z-index:999999;' +
+      'width:360px;background:linear-gradient(135deg,rgba(20,10,10,0.98),rgba(8,14,22,0.98));' +
+      'border:1px solid rgba(255,71,87,0.6);border-left:4px solid #ff4757;border-radius:6px;' +
+      'padding:20px 22px;font-family:\'Share Tech Mono\',monospace;color:#c9d8ea;' +
+      'box-shadow:0 12px 48px rgba(0,0,0,0.7), 0 0 40px rgba(255,71,87,0.2);';
+    popup.innerHTML =
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
+        '<div style="font-size:40px;">🤖</div>' +
+        '<div>' +
+          '<div style="font-family:\'Orbitron\',monospace;font-size:14px;color:#ff4757;letter-spacing:0.12em;">' + title + '</div>' +
+          '<div style="font-size:9px;color:#94a3b8;letter-spacing:0.1em;margin-top:2px;">AI ROBOT ALERT · LIVE</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="font-size:11.5px;line-height:1.6;color:#e2e8f0;padding:10px 12px;background:rgba(255,71,87,0.08);border-left:2px solid #ff4757;border-radius:3px;">' + msg + '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:14px;">' +
+        '<div style="flex:1;font-size:9px;color:#ff4757;padding:6px 10px;background:rgba(255,71,87,0.12);border:1px solid rgba(255,71,87,0.4);border-radius:3px;text-align:center;">🔊 SPEAKING</div>' +
+        '<button id="robotAlertStop" style="font-family:\'Share Tech Mono\',monospace;font-size:10px;padding:6px 14px;background:rgba(0,255,157,0.1);color:#00ff9d;border:1px solid rgba(0,255,157,0.45);border-radius:3px;cursor:pointer;">⏹ STOP</button>' +
+      '</div>';
+    document.body.appendChild(popup);
+
+    var stop = document.getElementById('robotAlertStop');
+    if (stop) stop.addEventListener('click', function(){
+      try { window.speechSynthesis.cancel(); } catch(e){}
+      popup.remove();
+    });
+    setTimeout(function(){ popup.remove(); }, 12000);
+  }
+
+  function fire(key){
+    var sc = SCENARIOS[key];
+    if (!sc) return;
+    speak(sc.msg);
+    showPopup(sc.title, sc.msg);
+    console.log('[direct-card]', key, '·', sc.title);
+  }
+
+  function wire(){
+    document.querySelectorAll('.alert-scenario').forEach(function(card){
+      if (card.dataset.directWired) return;
+      card.dataset.directWired = '1';
+
+      var key = card.dataset.scenario;
+      if (!key){
+        // Fallback: read from onclick
+        var oc = card.getAttribute('onclick') || '';
+        var m = oc.match(/trigger(\w+)Alert/);
+        if (m) key = m[1].toLowerCase();
+      }
+      if (!key || !SCENARIOS[key]) return;
+
+      card.addEventListener('click', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        fire(key);
+      }, true);
+    });
+    console.log('[direct-card] wired', document.querySelectorAll('.alert-scenario').length, 'cards');
+  }
+
+  wire();
+  setInterval(wire, 2000);
+
+  console.log('[direct-card] armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
