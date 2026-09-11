@@ -7,6 +7,21 @@
   var toggleBtn = null;
   var unlocked = false;
 
+  // Clean text for speech — remove special chars that confuse TTS
+  function clean(t){
+    return (t||'')
+      .replace(/µg\/kg/g,'micrograms per kilogram')
+      .replace(/µg\/L/g,'micrograms per litre')
+      .replace(/IMMEDIATE/g,'Immediate')
+      .replace(/CLOSURE/g,'closure')
+      .replace(/MARPOL/g,'Mar-pol')
+      .replace(/PAH/g,'P A H')
+      .replace(/VOC/g,'V O C')
+      .replace(/AQI/g,'A Q I')
+      .replace(/\s+/g,' ')
+      .trim();
+  }
+
   function pickVoice(){
     var voices = window.speechSynthesis.getVoices();
     var preferred = ['Google UK English Male','Microsoft David','Daniel','Google US English','Microsoft Mark'];
@@ -24,19 +39,19 @@
   function speak(text, silent){
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
-    // Clean up text for speech: remove newlines, extra spaces
-    var clean = (text || '').replace(/\s+/g, ' ').trim();
-    if (!clean) return;
-    var u = new SpeechSynthesisUtterance(clean);
+    var c = clean(text);
+    if (!c) return;
+    var u = new SpeechSynthesisUtterance(c);
     u.rate = 0.88;
     u.pitch = 0.75;
     u.volume = silent ? 0 : 1.0;
     var v = pickVoice();
     if (v) u.voice = v;
     window.speechSynthesis.speak(u);
-    if (!silent) console.log('[voice-alert] spoken ·', clean);
+    if (!silent) console.log('[voice-alert] spoken ·', c);
   }
 
+  // Read the RECOMMENDED ACTION text from Food Safety panel
   function readActionText(){
     var el = document.getElementById('fsAction');
     if (!el) return null;
@@ -49,7 +64,7 @@
     if (unlocked) return;
     unlocked = true;
     try { speak(' ', true); } catch(e){}
-    setTimeout(function(){ try { speak(' ', true); } catch(e){} }, 500);
+    setTimeout(function(){ try { speak(' ', true); } catch(e){} }, 400);
     console.log('[voice-alert] unlocked by user gesture');
   }
   ['click','touchstart','keydown','mousedown'].forEach(function(ev){
@@ -70,15 +85,21 @@
       "font-family:'Share Tech Mono',monospace;font-size:10px;" +
       "letter-spacing:0.12em;text-transform:uppercase;transition:all 0.2s;";
     toggleBtn.textContent = '🔊 VOICE ALERT: ON  (click to test)';
+
     toggleBtn.addEventListener('click', function(ev){
       ev.stopPropagation();
       unlock();
+
+      // First click: read current RECOMMENDED ACTION text
       if (toggleBtn.dataset.tested !== '1'){
         toggleBtn.dataset.tested = '1';
         var msg = readActionText() || 'Voice alert test. System ready.';
         setTimeout(function(){ speak(msg); }, 250);
+        toggleBtn.textContent = '🔊 VOICE ALERT: ON';
         return;
       }
+
+      // Subsequent clicks: toggle on/off
       voiceEnabled = !voiceEnabled;
       if (!voiceEnabled) window.speechSynthesis.cancel();
       toggleBtn.textContent = voiceEnabled ? '🔊 VOICE ALERT: ON' : '🔇 VOICE ALERT: OFF';
@@ -87,6 +108,7 @@
       toggleBtn.style.color = voiceEnabled ? '#ff4757' : '#5c7286';
       if (voiceEnabled) speak('Voice alerts enabled');
     });
+
     panel.appendChild(toggleBtn);
     console.log('[voice-alert] toggle added');
   }
@@ -113,5 +135,5 @@
   }
 
   setInterval(check, 3000);
-  console.log('[voice-alert] armed — speaks fsAction text');
+  console.log('[voice-alert] armed — speaks RECOMMENDED ACTION text');
 })();
