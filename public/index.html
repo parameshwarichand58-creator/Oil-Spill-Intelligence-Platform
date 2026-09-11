@@ -3927,110 +3927,6 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[sar] ready — overriding runSatelliteScan');
 })();
-</script><script id="alert-6scenarios">
-// Restore the 3 trigger functions on the Alert page
-(function(){
-  if (window.__alert6) return;
-  window.__alert6 = true;
-
-  function fire(title, msg){
-    // Use existing startAlert if available
-    if (typeof window.startAlert === 'function'){
-      try { window.startAlert(msg); return; } catch(e){}
-    }
-    // Fallback: show a toast/popup ourselves
-    var el = document.createElement('div');
-    el.style.cssText = 'position:fixed;top:44px;right:24px;z-index:999999;' +
-      'background:rgba(8,14,22,0.96);border:1px solid rgba(255,71,87,0.6);' +
-      'border-left:3px solid #ff4757;border-radius:4px;padding:14px 20px;' +
-      'font-family:\'Share Tech Mono\',monospace;font-size:12px;color:#c9d8ea;' +
-      'box-shadow:0 8px 32px rgba(0,0,0,0.5);backdrop-filter:blur(12px);' +
-      'max-width:340px;line-height:1.6;';
-    el.innerHTML = '<div style="color:#ff4757;letter-spacing:0.14em;font-size:11px;margin-bottom:6px;">🚨 ' + title + '</div>' + msg;
-    document.body.appendChild(el);
-    setTimeout(function(){ el.remove(); }, 5000);
-    console.log('[alert6] fired:', title);
-  }
-
-  window.triggerNaturalAlert = function(){
-    fire('NATURAL SEEPAGE', 'Natural oil seepage detected. No vessel involved. Environmental response required.');
-  };
-  window.triggerCulpritAlert = function(){
-    fire('CULPRIT THEFT', 'Oil spill detected! Cargo Gamma attempted illegal transfer. Coast guard notified.');
-  };
-  window.triggerInternalAlert = function(){
-    fire('INTERNAL FAILURE', 'Internal failure on Cargo Gamma. Mechanical breakdown causing discharge.');
-  };
-
-  console.log('[alert6] natural / culprit / internal wired');
-})();
-</script><script id="alert-page-logic">
-(function(){
-  if (window.__alertPageLogic) return;
-  window.__alertPageLogic = true;
-
-  var total = 0;
-  var active = 0;
-  var history = [];
-
-  function logAlert(name, desc){
-    var log = document.getElementById('alertLog');
-    if (!log) return;
-    history.unshift({ time: new Date().toTimeString().slice(0,8), name: name, desc: desc });
-    if (history.length > 20) history.pop();
-
-    log.innerHTML = history.map(function(h){
-      return '<div class="log-row"><span class="log-time">' + h.time + '</span>' +
-             '<span class="log-name">' + h.name + '</span>' +
-             '<span class="log-desc">' + h.desc + '</span></div>';
-    }).join('');
-  }
-
-  function bump(name, desc){
-    total++;
-    active++;
-    var t = document.getElementById('alertTotal');
-    var l = document.getElementById('alertLast');
-    var a = document.getElementById('alertActive');
-    if (t) t.textContent = total;
-    if (l) l.textContent = name;
-    if (a) a.textContent = active;
-    logAlert(name, desc);
-    // Active decays after 10s
-    setTimeout(function(){ active = Math.max(0, active - 1); if (a) a.textContent = active; }, 10000);
-  }
-
-  // Wrap the existing trigger functions
-  function wrap(name, label){
-    var orig = window[name];
-    if (typeof orig !== 'function') return;
-    window[name] = function(){
-      bump(label, 'Scenario triggered');
-      return orig.apply(this, arguments);
-    };
-  }
-
-  setTimeout(function(){
-    wrap('triggerNaturalAlert',  'Natural Seepage');
-    wrap('triggerCulpritAlert',  'Culprit Theft');
-    wrap('triggerInternalAlert', 'Internal Failure');
-    wrap('triggerCollisionAlert','Collision Accident');
-    wrap('triggerFireAlert',     'Fire Explosion');
-    wrap('triggerWeatherAlert',  'Weather Storm');
-    console.log('[alert] wrapped trigger functions');
-  }, 500);
-
-  window.clearAlertHistory = function(){
-    total = 0; active = 0; history = [];
-    var t = document.getElementById('alertTotal'); if (t) t.textContent = '0';
-    var a = document.getElementById('alertActive'); if (a) a.textContent = '0';
-    var l = document.getElementById('alertLast'); if (l) l.textContent = '—';
-    var log = document.getElementById('alertLog');
-    if (log) log.innerHTML = '<div class="empty">No alerts yet — click any scenario below</div>';
-  };
-
-  console.log('[alert] page logic armed');
-})();
 </script><script id="live-ocean-threat">
 // Live ocean conditions + threat level cycling
 (function(){
@@ -4724,12 +4620,126 @@ body.analysis-visible #analysis-pause-btn { display: block; }
 
   console.log('[sat-metrics] armed — cloud/water/land/quality/risk live');
 })();
+</script><script id="alert-robot-restore">
+// Restore robot avatar + voice alert for all 6 scenarios
+(function(){
+  if (window.__alertRobotRestore) return;
+  window.__alertRobotRestore = true;
+
+  var SCENARIOS = {
+    natural:   { title:'NATURAL SEEPAGE',   msg:'Natural oil seepage detected. No vessel involved. Take environmental action.' },
+    culprit:   { title:'OIL SPILL DETECTED', msg:'Oil spill detected! Cargo Gamma attempted illegal transfer. Coast guard notified.' },
+    internal:  { title:'INTERNAL FAILURE',  msg:'Internal failure on Cargo Gamma. Mechanical breakdown causing discharge.' },
+    collision: { title:'COLLISION ACCIDENT', msg:'Collision detected. Two vessels in contact. Active spill reported.' },
+    fire:      { title:'FIRE EXPLOSION',    msg:'Fire on board tanker. Full emergency response required immediately.' },
+    weather:   { title:'WEATHER STORM',     msg:'Storm cell approaching. Hull stress risk. Vessels advised to alter course.' }
+  };
+
+  // Try to reuse the original startAlert if it exists
+  function useStartAlert(msg){
+    if (typeof window.startAlert === 'function'){
+      try { window.startAlert(msg); return true; } catch(e){}
+    }
+    return false;
+  }
+
+  // Fallback: full robot popup + voice
+  function showRobotAlert(title, msg){
+    // Speech synthesis
+    try {
+      if (window.speechSynthesis){
+        window.speechSynthesis.cancel();
+        var u = new SpeechSynthesisUtterance(msg);
+        u.rate = 0.95;
+        u.pitch = 1.0;
+        u.volume = 1.0;
+        window.speechSynthesis.speak(u);
+      }
+    } catch(e){}
+
+    // Remove any existing popup
+    var old = document.getElementById('robotAlertPopup');
+    if (old) old.remove();
+
+    // Build the popup
+    var popup = document.createElement('div');
+    popup.id = 'robotAlertPopup';
+    popup.style.cssText = 'position:fixed;top:60px;right:24px;z-index:999999;' +
+      'width:360px;background:linear-gradient(135deg,rgba(20,10,10,0.98),rgba(8,14,22,0.98));' +
+      'border:1px solid rgba(255,71,87,0.6);border-left:4px solid #ff4757;border-radius:6px;' +
+      'padding:20px 22px;font-family:\'Share Tech Mono\',monospace;color:#c9d8ea;' +
+      'box-shadow:0 12px 48px rgba(0,0,0,0.7), 0 0 40px rgba(255,71,87,0.2);' +
+      'animation:slideIn 0.35s ease;';
+    popup.innerHTML =
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
+        '<div style="font-size:40px;animation:shake 1s ease-in-out infinite;">🤖</div>' +
+        '<div>' +
+          '<div style="font-family:\'Orbitron\',monospace;font-size:14px;color:#ff4757;letter-spacing:0.12em;text-shadow:0 0 12px rgba(255,71,87,0.6);">' + title + '</div>' +
+          '<div style="font-size:9px;color:#94a3b8;letter-spacing:0.1em;margin-top:2px;">AI ROBOT ALERT · LIVE</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="font-size:11.5px;line-height:1.6;color:#e2e8f0;padding:10px 12px;background:rgba(255,71,87,0.08);border-left:2px solid #ff4757;border-radius:3px;">' +
+        msg +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:14px;">' +
+        '<div style="flex:1;font-size:9px;color:#ff4757;letter-spacing:0.1em;padding:6px 10px;background:rgba(255,71,87,0.12);border:1px solid rgba(255,71,87,0.4);border-radius:3px;text-align:center;">🔊 SPEAKING</div>' +
+        '<button id="robotAlertStop" style="font-family:\'Share Tech Mono\',monospace;font-size:10px;padding:6px 14px;background:rgba(0,255,157,0.1);color:#00ff9d;border:1px solid rgba(0,255,157,0.45);border-radius:3px;cursor:pointer;letter-spacing:0.1em;">⏹ STOP</button>' +
+      '</div>';
+
+    // Add animations
+    if (!document.getElementById('robot-alert-styles')){
+      var s = document.createElement('style');
+      s.id = 'robot-alert-styles';
+      s.textContent =
+        '@keyframes slideIn{from{transform:translateX(420px);opacity:0}to{transform:translateX(0);opacity:1}}' +
+        '@keyframes shake{0%,100%{transform:rotate(0deg)}25%{transform:rotate(-6deg)}75%{transform:rotate(6deg)}}';
+      document.head.appendChild(s);
+    }
+
+    document.body.appendChild(popup);
+
+    // Stop button
+    var stop = document.getElementById('robotAlertStop');
+    if (stop){
+      stop.addEventListener('click', function(){
+        try { window.speechSynthesis.cancel(); } catch(e){}
+        popup.remove();
+      });
+    }
+
+    // Auto-close after 12 seconds
+    setTimeout(function(){ popup.remove(); }, 12000);
+  }
+
+  // Wire every trigger function
+  function makeTrigger(key){
+    var sc = SCENARIOS[key];
+    return function(){
+      // Try original startAlert (may show robot avatar in existing UI)
+      var handled = useStartAlert(sc.msg);
+      // Always show our popup + voice too
+      showRobotAlert(sc.title, sc.msg);
+      console.log('[robot-alert]', key, '·', sc.title);
+    };
+  }
+
+  // Override all 6
+  window.triggerNaturalAlert   = makeTrigger('natural');
+  window.triggerCulpritAlert   = makeTrigger('culprit');
+  window.triggerInternalAlert  = makeTrigger('internal');
+  window.triggerCollisionAlert = makeTrigger('collision');
+  window.triggerFireAlert      = makeTrigger('fire');
+  window.triggerWeatherAlert   = makeTrigger('weather');
+
+  console.log('[robot-alert] all 6 scenarios wired with robot + voice');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
