@@ -504,12 +504,49 @@
         <div class="satellite-scanner">
             <div class="scan-overlay"></div>
             <div class="card-title"><i class="fas fa-satellite-dish"></i> <span id="sarTitle">SAR Satellite Scanner</span></div>
-            <div class="sat-img" id="satImg">
-                🛰️
-                <div class="scan-line" id="scanLine"></div>
-                <div class="label" id="scanLabel">Press "Scan" to start</div>
-            </div>
-            <div class="scan-stats">
+                        <div id="satImg" style="position:relative;background:#050a12;border:1px solid rgba(0,255,157,0.25);border-radius:6px;overflow:hidden;margin-bottom:12px;">
+                <div id="satViewerToolbar" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(8,14,22,0.85);border-bottom:1px solid rgba(0,255,157,0.15);">
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <button class="sat-layer-btn active" data-layer="MODIS_Terra_CorrectedReflectance_TrueColor" style="background:rgba(0,255,157,0.15);border:1px solid rgba(0,255,157,0.5);color:#00ff9d;font-family:'Share Tech Mono',monospace;font-size:10px;padding:5px 10px;border-radius:3px;cursor:pointer;letter-spacing:0.08em;">TRUE COLOR</button>
+                        <button class="sat-layer-btn" data-layer="MODIS_Terra_CorrectedReflectance_Bands721" style="background:rgba(74,158,255,0.08);border:1px solid rgba(74,158,255,0.3);color:#4a9eff;font-family:'Share Tech Mono',monospace;font-size:10px;padding:5px 10px;border-radius:3px;cursor:pointer;letter-spacing:0.08em;">FALSE COLOR</button>
+                        <button class="sat-layer-btn" data-layer="MODIS_Terra_Cloud_Top_Temp_Day" style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.3);color:#a855f7;font-family:'Share Tech Mono',monospace;font-size:10px;padding:5px 10px;border-radius:3px;cursor:pointer;letter-spacing:0.08em;">CLOUD TOP</button>
+                    </div>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <button class="sat-zoom-btn" data-zoom="bay" style="background:rgba(8,14,22,0.8);border:1px solid rgba(255,255,255,0.15);color:#c9d8ea;font-family:'Share Tech Mono',monospace;font-size:9px;padding:5px 8px;border-radius:3px;cursor:pointer;">BAY</button>
+                        <button class="sat-zoom-btn" data-zoom="chennai" style="background:rgba(8,14,22,0.8);border:1px solid rgba(255,255,255,0.15);color:#c9d8ea;font-family:'Share Tech Mono',monospace;font-size:9px;padding:5px 8px;border-radius:3px;cursor:pointer;">CHENNAI</button>
+                        <button class="sat-zoom-btn" data-zoom="kolkata" style="background:rgba(8,14,22,0.8);border:1px solid rgba(255,255,255,0.15);color:#c9d8ea;font-family:'Share Tech Mono',monospace;font-size:9px;padding:5px 8px;border-radius:3px;cursor:pointer;">KOLKATA</button>
+                    </div>
+                </div>
+
+                <div style="position:relative;">
+                    <img id="satLiveImage" alt="Live satellite" style="display:block;width:100%;height:420px;object-fit:cover;transition:opacity 0.5s ease;"/>
+                    <div id="satLiveOverlay" style="position:absolute;top:12px;left:12px;background:rgba(8,14,22,0.9);border:1px solid rgba(0,255,157,0.4);border-radius:3px;padding:5px 10px;font-family:'Share Tech Mono',monospace;font-size:9px;color:#00ff9d;letter-spacing:0.1em;backdrop-filter:blur(6px);">
+                        ● LIVE · <span id="satLiveLayerName">MODIS TERRA</span>
+                    </div>
+                    <div id="satLiveMeta" style="position:absolute;top:12px;right:12px;background:rgba(8,14,22,0.9);border:1px solid rgba(74,158,255,0.4);border-radius:3px;padding:6px 12px;font-family:'Share Tech Mono',monospace;font-size:9px;color:#4a9eff;letter-spacing:0.06em;backdrop-filter:blur(6px);text-align:right;line-height:1.5;">
+                        <div>DATE: <span id="satLiveDate">--</span></div>
+                        <div>DAY: <span id="satLiveDay">--</span></div>
+                    </div>
+                </div>
+
+                <div style="padding:10px 14px;background:rgba(8,14,22,0.85);border-top:1px solid rgba(0,255,157,0.15);">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                        <span style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#5c7286;letter-spacing:0.1em;">TIMELINE</span>
+                        <input id="satLiveSlider" type="range" min="0" max="7" value="0" style="flex:1;accent-color:#00ff9d;"/>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;gap:8px;">
+                        <div style="display:flex;gap:6px;">
+                            <button id="satLivePrev" style="background:rgba(8,14,22,0.8);border:1px solid rgba(255,255,255,0.15);color:#c9d8ea;font-family:'Share Tech Mono',monospace;font-size:10px;padding:5px 12px;border-radius:3px;cursor:pointer;">◀</button>
+                            <button id="satLivePlayPause" style="background:rgba(0,255,157,0.12);border:1px solid rgba(0,255,157,0.5);color:#00ff9d;font-family:'Share Tech Mono',monospace;font-size:10px;padding:5px 14px;border-radius:3px;cursor:pointer;letter-spacing:0.1em;">⏸ PAUSE</button>
+                            <button id="satLiveNext" style="background:rgba(8,14,22,0.8);border:1px solid rgba(255,255,255,0.15);color:#c9d8ea;font-family:'Share Tech Mono',monospace;font-size:10px;padding:5px 12px;border-radius:3px;cursor:pointer;">▶</button>
+                        </div>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <span id="satLiveStats" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#5c7286;letter-spacing:0.08em;">FRAME 1/8</span>
+                            <button id="satLiveDownload" style="background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.4);color:#00d4ff;font-family:'Share Tech Mono',monospace;font-size:10px;padding:5px 12px;border-radius:3px;cursor:pointer;letter-spacing:0.08em;">⬇ DOWNLOAD</button>
+                        </div>
+                    </div>
+                </div>
+            </div><div class="scan-stats">
                 <span><span id="statusLabel">Status</span>: <span id="scanStatus" style="color:#64748b;">Ready</span></span>
                 <span><span id="coverageLabel">Coverage</span>: 250km²</span>
             </div>
@@ -4387,12 +4424,179 @@ body.analysis-visible #analysis-pause-btn { display: block; }
   setTimeout(sync, 1500);
   console.log('[ais-sync] armed');
 })();
+</script><script id="sat-live-viewer-logic">
+(function(){
+  if (window.__satLiveViewerV2) return;
+  window.__satLiveViewerV2 = true;
+
+  var LAYERS = {
+    'MODIS_Terra_CorrectedReflectance_TrueColor': 'MODIS TERRA TRUE COLOR',
+    'MODIS_Terra_CorrectedReflectance_Bands721': 'MODIS FALSE COLOR',
+    'MODIS_Terra_Cloud_Top_Temp_Day': 'CLOUD TOP TEMP'
+  };
+  var ZONES = {
+    bay:     { bbox: '5,78,23,95',   name: 'BAY OF BENGAL' },
+    chennai: { bbox: '11,78,15,82',  name: 'CHENNAI COAST' },
+    kolkata: { bbox: '20,85,24,90',  name: 'KOLKATA / HALDIA' }
+  };
+
+  var dates = [];
+  for (var i = 0; i < 8; i++){
+    var d = new Date();
+    d.setDate(d.getDate() - i);
+    dates.push(d.toISOString().slice(0,10));
+  }
+
+  var idx = 0;
+  var layer = 'MODIS_Terra_CorrectedReflectance_TrueColor';
+  var zone = 'bay';
+  var playing = true;
+  var timer = null;
+
+  function gibsUrl(){
+    var z = ZONES[zone];
+    return 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
+      '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0' +
+      '&LAYERS=' + layer +
+      '&FORMAT=image/jpeg&TRANSPARENT=FALSE&STYLES=' +
+      '&CRS=EPSG:4326&BBOX=' + z.bbox +
+      '&WIDTH=900&HEIGHT=500&TIME=' + dates[idx];
+  }
+
+  function show(){
+    var img = document.getElementById('satLiveImage');
+    if (!img) return;
+    img.style.opacity = '0.4';
+    img.onload = function(){
+      img.style.opacity = '1';
+      updateMeta();
+    };
+    img.onerror = function(){
+      idx = (idx + 1) % dates.length;
+      show();
+    };
+    img.src = gibsUrl();
+    updateMeta();
+  }
+
+  function updateMeta(){
+    var dateEl = document.getElementById('satLiveDate');
+    var dayEl  = document.getElementById('satLiveDay');
+    var statsEl= document.getElementById('satLiveStats');
+    var nameEl = document.getElementById('satLiveLayerName');
+    if (dateEl) dateEl.textContent = dates[idx];
+    if (dayEl)  dayEl.textContent  = idx === 0 ? 'TODAY' : 'T-' + idx;
+    if (statsEl) statsEl.textContent = 'FRAME ' + (idx + 1) + '/' + dates.length + ' · ' + ZONES[zone].name;
+    if (nameEl) nameEl.textContent = LAYERS[layer] || 'MODIS';
+    var slider = document.getElementById('satLiveSlider');
+    if (slider) slider.value = idx;
+  }
+
+  function next(){ idx = (idx + 1) % dates.length; show(); }
+  function prev(){ idx = (idx - 1 + dates.length) % dates.length; show(); }
+
+  function play(){
+    if (timer) clearInterval(timer);
+    timer = setInterval(next, 3000);
+    var b = document.getElementById('satLivePlayPause');
+    if (b) b.textContent = '⏸ PAUSE';
+    playing = true;
+  }
+  function pause(){
+    if (timer) clearInterval(timer);
+    timer = null;
+    var b = document.getElementById('satLivePlayPause');
+    if (b) b.textContent = '▶ PLAY';
+    playing = false;
+  }
+
+  function wire(){
+    var prevBtn = document.getElementById('satLivePrev');
+    var nextBtn = document.getElementById('satLiveNext');
+    var playBtn = document.getElementById('satLivePlayPause');
+    var dlBtn   = document.getElementById('satLiveDownload');
+    var slider  = document.getElementById('satLiveSlider');
+    if (!prevBtn){ setTimeout(wire, 400); return; }
+    if (prevBtn.dataset.wired) return;
+    prevBtn.dataset.wired = '1';
+    nextBtn.dataset.wired = '1';
+    playBtn.dataset.wired = '1';
+    if (dlBtn) dlBtn.dataset.wired = '1';
+    if (slider) slider.dataset.wired = '1';
+
+    prevBtn.addEventListener('click', function(e){ e.preventDefault(); prev(); });
+    nextBtn.addEventListener('click', function(e){ e.preventDefault(); next(); });
+    playBtn.addEventListener('click', function(e){
+      e.preventDefault();
+      playing ? pause() : play();
+    });
+    if (dlBtn){
+      dlBtn.addEventListener('click', function(e){
+        e.preventDefault();
+        var img = document.getElementById('satLiveImage');
+        if (!img || !img.src) return;
+        var a = document.createElement('a');
+        a.href = img.src;
+        a.download = 'ocean-eye-satellite-' + dates[idx] + '.jpg';
+        a.click();
+      });
+    }
+    if (slider){
+      slider.addEventListener('input', function(){
+        idx = parseInt(this.value) || 0;
+        pause();
+        show();
+      });
+    }
+
+    // Layer buttons
+    document.querySelectorAll('.sat-layer-btn').forEach(function(b){
+      if (b.dataset.wired) return;
+      b.dataset.wired = '1';
+      b.addEventListener('click', function(){
+        layer = this.dataset.layer;
+        document.querySelectorAll('.sat-layer-btn').forEach(function(x){
+          x.style.background = 'rgba(74,158,255,0.08)';
+          x.style.borderColor = 'rgba(74,158,255,0.3)';
+          x.style.color = '#4a9eff';
+        });
+        this.style.background = 'rgba(0,255,157,0.15)';
+        this.style.borderColor = 'rgba(0,255,157,0.5)';
+        this.style.color = '#00ff9d';
+        show();
+      });
+    });
+
+    // Zoom presets
+    document.querySelectorAll('.sat-zoom-btn').forEach(function(b){
+      if (b.dataset.wired) return;
+      b.dataset.wired = '1';
+      b.addEventListener('click', function(){
+        zone = this.dataset.zoom;
+        document.querySelectorAll('.sat-zoom-btn').forEach(function(x){
+          x.style.borderColor = 'rgba(255,255,255,0.15)';
+          x.style.color = '#c9d8ea';
+        });
+        this.style.borderColor = 'rgba(0,255,157,0.5)';
+        this.style.color = '#00ff9d';
+        show();
+      });
+    });
+
+    console.log('[sat-live-v2] wired');
+  }
+
+  setTimeout(function(){ show(); wire(); play(); }, 900);
+  setInterval(wire, 2000);
+  console.log('[sat-live-v2] armed');
+})();
 </script></html>
 
 
 
 
 <!-- trigger redeploy -->
+
 
 
 
