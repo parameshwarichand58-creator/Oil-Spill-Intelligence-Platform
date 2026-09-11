@@ -50,11 +50,11 @@
 
       '<div id="hAddForm" style="display:none;background:rgba(0,212,170,0.04);border:1px solid rgba(0,212,170,0.2);border-radius:6px;padding:12px 14px;margin-bottom:14px;">',
         '<div style="font-family:\'Share Tech Mono\',monospace;font-size:10px;color:#00d4aa;letter-spacing:0.1em;margin-bottom:8px;">➕ ADD NEW DISTRICT</div>',
-        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;">',
-          '<input id="hdName" placeholder="District name" style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.06);color:#e2e8f0;padding:8px;border-radius:4px;font-size:11px;">',
-          '<input id="hdPop" type="number" placeholder="Population" value="1000000" style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.06);color:#e2e8f0;padding:8px;border-radius:4px;font-size:11px;">',
-          '<input id="hdVul" type="number" placeholder="Vulnerable" value="200000" style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.06);color:#e2e8f0;padding:8px;border-radius:4px;font-size:11px;">',
-          '<input id="hdSym" type="number" placeholder="Symptoms" value="5" style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.06);color:#e2e8f0;padding:8px;border-radius:4px;font-size:11px;">',
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;">',
+          '<div><div style="font-family:\'Share Tech Mono\',monospace;font-size:9px;color:#94a3b8;letter-spacing:0.08em;margin-bottom:4px;">🏙️ DISTRICT NAME</div><input id="hdName" placeholder="e.g. Chennai Coast" style="width:100%;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.06);color:#e2e8f0;padding:8px;border-radius:4px;font-size:11px;"></div>',
+          '<div><div style="font-family:\'Share Tech Mono\',monospace;font-size:9px;color:#94a3b8;letter-spacing:0.08em;margin-bottom:4px;">👥 POPULATION</div><input id="hdPop" type="number" placeholder="e.g. 1000000" value="1000000" style="width:100%;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.06);color:#e2e8f0;padding:8px;border-radius:4px;font-size:11px;"></div>',
+          '<div><div style="font-family:\'Share Tech Mono\',monospace;font-size:9px;color:#94a3b8;letter-spacing:0.08em;margin-bottom:4px;">⚠️ VULNERABLE</div><input id="hdVul" type="number" placeholder="e.g. 200000" value="200000" style="width:100%;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.06);color:#e2e8f0;padding:8px;border-radius:4px;font-size:11px;"></div>',
+          '<div><div style="font-family:\'Share Tech Mono\',monospace;font-size:9px;color:#94a3b8;letter-spacing:0.08em;margin-bottom:4px;">🤒 SYMPTOMS</div><input id="hdSym" type="number" placeholder="e.g. 5" value="5" style="width:100%;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.06);color:#e2e8f0;padding:8px;border-radius:4px;font-size:11px;"></div>',
         '</div>',
         '<div class="btn-group" style="margin-top:10px;">',
           '<button class="btn btn-success btn-sm" id="hdSave">SAVE</button>',
@@ -249,3 +249,4 @@
   setTimeout(render,2700); setInterval(render,7000);
   console.log('[health] armed — v2 with districts, banner, beaches, AQI trend');
 })();
+
