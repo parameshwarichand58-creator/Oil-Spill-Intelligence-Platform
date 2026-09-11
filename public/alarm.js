@@ -11,8 +11,18 @@
     weather:{t:"Weather Storm",r:"A severe storm cell is approaching at forty five knots. Hull stress risk is high. All vessels are advised to alter course immediately."}
   };
 
+  // ---------- KILL THE OLD ROBOT VOICE ----------
+  // The original code calls startAlert() which does a robotic speech.
+  // Override it to do nothing so only our human voice plays.
+  window.startAlert = function(){ console.log("[killed] old startAlert suppressed"); };
+  // Also kill any other common robot voice function names
+  window.speakRobot = function(){};
+  window.robotSpeak = function(){};
+
+  // Stop any currently-running old robot voice on page load
+  try { window.speechSynthesis.cancel(); } catch(e){}
+
   var ctx = null, timer = null, running = false;
-  var masterGain = null;
 
   function getCtx(){
     if(!ctx){try{ctx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}
@@ -20,7 +30,6 @@
     return ctx;
   }
 
-  // Louder, clearer single beep — triangle wave for crisp tone
   function beep(){
     var c = getCtx(); if(!c) return;
     var o = c.createOscillator();
@@ -28,20 +37,17 @@
     o.type = "triangle";
     o.frequency.value = 2100;
     g.gain.value = 0;
-    o.connect(g);
-    g.connect(c.destination);
+    o.connect(g); g.connect(c.destination);
     var n = c.currentTime;
-    g.gain.linearRampToValueAtTime(0.55, n + 0.008);
-    g.gain.setValueAtTime(0.55, n + 0.10);
+    g.gain.linearRampToValueAtTime(0.5, n + 0.008);
+    g.gain.setValueAtTime(0.5, n + 0.10);
     g.gain.linearRampToValueAtTime(0.001, n + 0.13);
-    o.start(n);
-    o.stop(n + 0.15);
+    o.start(n); o.stop(n + 0.15);
   }
 
   function startAlarm(){
     if(running) return;
-    running = true;
-    getCtx();
+    running = true; getCtx();
     function cycle(){
       if(!running) return;
       beep();
@@ -49,76 +55,57 @@
       timer = setTimeout(cycle, 620);
     }
     cycle();
-    console.log("[alarm] started — steady security alarm");
   }
 
   function stopAlarm(){
     running = false;
     if(timer){clearTimeout(timer);timer=null;}
-    console.log("[alarm] stopped");
   }
 
-  // Duck volume while voice speaks (via Web Audio), keep it silent if no separate gain
-  function duckAlarm(on){
-    var c = getCtx(); if(!c) return;
-    // We do not modulate the beeps here — the beep envelope handles its own volume.
-    // Instead we pause the alarm loop while voice speaks, and resume after.
-    if(on){
-      if(running){ running = false; if(timer){clearTimeout(timer);timer=null;} }
-    } else {
-      if(!running) startAlarm();
-    }
-  }
-
-  // Pick ONLY natural human voices. Never David/Zira Desktop (robotic).
-  function pickHumanVoice(){
+  // ---------- HUMAN LADY VOICE ----------
+  function pickLadyVoice(){
     if(!window.speechSynthesis) return null;
     var v = window.speechSynthesis.getVoices();
     if(!v || !v.length) return null;
 
-    // Ordered list of high-quality human-sounding voices
+    // ONLY female voices
     var order = [
       "Microsoft Aria Online (Natural)",
       "Microsoft Jenny Online (Natural)",
       "Microsoft Michelle Online (Natural)",
       "Microsoft Ana Online (Natural)",
-      "Microsoft Clara Online (Natural)",
-      "Microsoft Emily Online (Natural)",
+      "Microsoft Zira Desktop",
+      "Microsoft Zira",
       "Google US English",
       "Google UK English Female",
       "Samantha",
       "Karen",
       "Moira",
       "Tessa",
-      "Victoria"
+      "Victoria",
+      "Allison",
+      "Ava"
     ];
     for(var i = 0; i < order.length; i++){
       var m = v.find(function(x){ return x.name === order[i]; });
       if(m) return m;
     }
-
-    // Partial match for any "Natural" or "Online" voice
-    var nat = v.find(function(x){ return /natural|online/i.test(x.name) && /en/i.test(x.lang); });
-    if(nat) return nat;
-
-    // Google voices only
-    var g = v.find(function(x){ return /google/i.test(x.name) && /en/i.test(x.lang); });
-    if(g) return g;
-
-    // Any female en voice (name match)
-    var f = v.find(function(x){ return /(aria|jenny|michelle|ana|samantha|karen|moira|tessa|ava|female|zira)/i.test(x.name) && /^en/i.test(x.lang); });
+    // Any female voice
+    var f = v.find(function(x){
+      return /(aria|jenny|michelle|ana|zira|samantha|karen|moira|tessa|victoria|allison|ava|female)/i.test(x.name) && /^en/i.test(x.lang);
+    });
     if(f) return f;
-
-    // Last resort: any en-US
-    return v.find(function(x){ return /^en[-_]US/i.test(x.lang); }) || null;
+    // Last resort: any en-US voice
+    return v.find(function(x){ return /^en[-_]US/i.test(x.lang); }) || v[0];
   }
 
+  // Human pitch, human rate. No robot effect.
   function say(text, voice){
     return new Promise(function(res){
       var u = new SpeechSynthesisUtterance(text);
       if(voice){ u.voice = voice; u.lang = voice.lang || "en-US"; }
-      u.rate   = 0.98;   // very slightly slower for clarity
-      u.pitch  = 1.0;    // natural human pitch
+      u.rate   = 1.0;    // natural speed
+      u.pitch  = 1.0;    // natural pitch
       u.volume = 1.0;    // full volume
       u.onend  = res;
       u.onerror = res;
@@ -137,30 +124,20 @@
     if(!window.speechSynthesis) return;
     try{ window.speechSynthesis.cancel(); }catch(e){}
 
-    var voice = pickHumanVoice();
-    console.log("[voice] using:", voice ? voice.name + " (" + voice.lang + ")" : "system default");
+    var voice = pickLadyVoice();
+    console.log("[lady] voice:", voice ? voice.name : "default");
 
-    if(!voice){
-      console.warn("[voice] No human voice available. Install Microsoft Aria/Jenny in Windows Settings.");
-    }
+    freeze(true);
 
-    freeze(true);      // robot stands still while speaking
-
-    // Pause the alarm for 250ms so the voice starts clean, then duck loop continues
     var lines = [
       "Attention. This is an emergency alert.",
       title + ".",
       reason,
       "Please take immediate action."
     ];
-
     for(var i = 0; i < lines.length; i++){
-      // Pause alarm while each sentence plays
-      duckAlarm(true);
       await say(lines[i], voice);
-      // Resume alarm between sentences
-      duckAlarm(false);
-      await new Promise(function(r){ setTimeout(r, 400); });
+      await new Promise(function(r){ setTimeout(r, 300); });
     }
 
     freeze(false);
@@ -187,12 +164,20 @@
       var showing = s.classList.contains("show");
       if(showing && !s.dataset.secActive){
         s.dataset.secActive = "1";
+
+        // Kill any robot voice the old code may have started
+        try{ window.speechSynthesis.cancel(); }catch(e){}
+
         getCtx();
         startAlarm();
+
+        // Lady voice starts IMMEDIATELY — 150ms after scene opens,
+        // so it plays DURING the alarm, not after
         setTimeout(function(){
           var k = getKey();
           if(k && SCEN[k]) speak(SCEN[k].t, SCEN[k].r);
-        }, 700);
+        }, 150);
+
       } else if(!showing && s.dataset.secActive){
         s.dataset.secActive = "";
         stopAlarm();
@@ -215,16 +200,14 @@
     });
   }
 
-  // Preload voices
   if(window.speechSynthesis){
     window.speechSynthesis.getVoices();
     window.speechSynthesis.onvoiceschanged = function(){
-      var v = pickHumanVoice();
-      console.log("[voice] available:", v ? v.name : "none");
+      var v = pickLadyVoice();
+      console.log("[lady] available:", v ? v.name : "none");
     };
   }
 
-  // Unlock audio on first user click
   document.addEventListener("click", function(){ getCtx(); }, { once:true });
 
   hookScene();
@@ -232,5 +215,5 @@
   setInterval(hookScene, 2000);
   setInterval(hookStop, 2000);
 
-  console.log("[alarm] armed — louder alarm + human voice");
+  console.log("[alarm] armed — no robot voice, only lady voice + alarm");
 })();
