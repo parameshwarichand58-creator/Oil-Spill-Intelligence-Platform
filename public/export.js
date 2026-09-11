@@ -14,9 +14,7 @@
     for(var i=0;i<a.length;i++){var e=$(a[i]);if(!e)continue;var n=parseFloat((e.textContent||'').replace(/[^0-9.]/g,''));if(isFinite(n)&&n>0)return n;}
     return 3;
   }
-  function readRisk(){
-    var e=$('fsRisk');return e&&e.textContent?e.textContent.trim():'UNSAFE';
-  }
+  function readRisk(){var e=$('fsRisk');return e&&e.textContent?e.textContent.trim():'UNSAFE';}
   function readShips(){
     var e=$('tick-ships')||$('liveVessels')||$('anaShips');
     if(e){var n=parseFloat((e.textContent||'').replace(/[^0-9.]/g,''));if(isFinite(n))return n;}
@@ -37,19 +35,6 @@
       confidence_pct: 83,
       satellites: { 'NASA MODIS':'online','ISRO RISAT':'online','Sentinel-1':'standby' }
     };
-  }
-
-  function download(filename, content, mime){
-    try{
-      var blob=new Blob([content],{type:mime});
-      var url=URL.createObjectURL(blob);
-      var a=document.createElement('a');
-      a.href=url; a.download=filename;
-      a.style.display='none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
-    }catch(e){ console.error('[export] download failed', e); }
   }
 
   function toCSV(d){
@@ -73,95 +58,85 @@
     }).join('\n');
   }
 
-  function flash(btn, text){
-    if(!btn) return;
-    var orig=btn.innerHTML;
-    btn.innerHTML=text;
-    btn.style.background='linear-gradient(135deg,#00d4aa,#059669)';
-    btn.style.color='#fff';
-    setTimeout(function(){ btn.innerHTML=orig; btn.style.background=''; btn.style.color=''; }, 1500);
+  function saveFile(filename, content, mime){
+    var blob=new Blob([content],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;
+    a.download=filename;
+    a.rel='noopener';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 300);
   }
 
-  function speak(txt){
-    try{
-      if(window.speechSynthesis){
-        window.speechSynthesis.cancel();
-        var u=new SpeechSynthesisUtterance(txt);
-        u.rate=0.95; u.pitch=0.85;
-        window.speechSynthesis.speak(u);
-      }
-    }catch(e){}
-  }
-
-  function handleCSV(btn){
+  function downloadCSV(){
     var d=buildData();
     var csv=toCSV(d);
     var ts=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
-    download('ocean-eye-'+ts+'.csv', csv, 'text/csv;charset=utf-8');
-    flash(btn, '✅ EXPORTED');
-    speak('C S V file exported');
+    saveFile('ocean-eye-'+ts+'.csv', csv, 'text/csv;charset=utf-8');
     console.log('[export] CSV downloaded', d);
   }
-
-  function handleJSON(btn){
+  function downloadJSON(){
     var d=buildData();
     var json=JSON.stringify(d,null,2);
     var ts=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
-    download('ocean-eye-'+ts+'.json', json, 'application/json');
-    flash(btn, '✅ EXPORTED');
-    speak('JSON file exported');
+    saveFile('ocean-eye-'+ts+'.json', json, 'application/json');
     console.log('[export] JSON downloaded', d);
   }
 
-  function identify(el){
-    var txt=(el.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
-    if(/\bcsv\b/.test(txt) && /export/.test(txt)) return 'csv';
-    if(/\bjson\b/.test(txt) && /export/.test(txt)) return 'json';
-    if(/export\s*csv/.test(txt)) return 'csv';
-    if(/export\s*json/.test(txt)) return 'json';
-    return null;
+  function isCSV(el){
+    var t=(el.textContent||'').toLowerCase();
+    return t.indexOf('csv')!==-1 && t.indexOf('export')!==-1;
+  }
+  function isJSON(el){
+    var t=(el.textContent||'').toLowerCase();
+    return t.indexOf('json')!==-1 && t.indexOf('export')!==-1;
   }
 
-  // Capture-phase override — kills any inline onclick on export buttons
-  document.addEventListener('click', function(e){
-    var el=e.target.closest('button, a, .btn, [role="button"], div, span');
-    if(!el) return;
-
-    // Walk up to find the real clickable that has "export ... csv/json" text
-    var node=el;
-    var kind=null;
-    for(var depth=0; depth<4 && node; depth++){
-      kind=identify(node);
-      if(kind) break;
-      node=node.parentElement;
+  // Strip any existing broken handlers, then attach clean ones
+  function fixButton(btn, kind){
+    // Remove inline onclick so it doesn't fire
+    if(btn.hasAttribute('onclick')) btn.removeAttribute('onclick');
+    // If it's an <a>, neutralize its href so it doesn't navigate
+    if(btn.tagName === 'A'){
+      btn.removeAttribute('href');
+      btn.setAttribute('href','javascript:void(0)');
+      btn.style.textDecoration='none';
     }
-    if(!kind) return;
-
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    e.stopPropagation();
-
-    console.log('[export] intercepted click ·', kind, '·', node && node.tagName);
-    if(kind==='csv') handleCSV(node);
-    else handleJSON(node);
-  }, true /* CAPTURE PHASE = fires before inline onclick */);
-
-  // Backup: proactively strip inline onclick attributes from export buttons
-  function stripInline(){
-    document.querySelectorAll('button, a, .btn').forEach(function(b){
-      var kind=identify(b);
-      if(kind && b.hasAttribute('onclick')){
-        b.removeAttribute('onclick');
-        console.log('[export] stripped inline onclick from', kind, 'button');
-      }
-    });
+    // Prevent default on mousedown too (some handlers attach there)
+    if(!btn.dataset.exportClean){
+      btn.dataset.exportClean='1';
+      btn.addEventListener('mousedown', function(e){ e.preventDefault(); });
+      btn.addEventListener('click', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        if(kind==='csv') downloadCSV();
+        else downloadJSON();
+      });
+    }
   }
-  setTimeout(stripInline, 400);
-  setTimeout(stripInline, 2000);
-  setTimeout(stripInline, 5000);
 
-  // Keep watching for late-rendered buttons
-  new MutationObserver(stripInline).observe(document.body, { childList:true, subtree:true });
+  function scan(){
+    var count=0;
+    document.querySelectorAll('button, a, .btn, [role="button"]').forEach(function(b){
+      if(isCSV(b)){ fixButton(b,'csv'); count++; }
+      else if(isJSON(b)){ fixButton(b,'json'); count++; }
+    });
+    if(count) console.log('[export] wired', count, 'button(s)');
+  }
 
-  console.log('[export] armed — capture-phase intercept for CSV/JSON');
+  // Scan multiple times in case buttons render late
+  setTimeout(scan, 300);
+  setTimeout(scan, 1500);
+  setTimeout(scan, 4000);
+  setTimeout(scan, 8000);
+
+  // Also re-scan on DOM changes
+  new MutationObserver(scan).observe(document.body, { childList:true, subtree:true });
+
+  console.log('[export] armed — clean download, no blank page');
 })();
