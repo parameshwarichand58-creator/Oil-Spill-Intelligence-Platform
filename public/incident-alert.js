@@ -35,7 +35,7 @@
       '<div><b>' + (inc.id || '-') + '</b> \u00b7 ' + (riskLevel(det.confidence)) + '</div>' +
       '<div>Location: ' + (det.lat || 0).toFixed(3) + ', ' + (det.lon || 0).toFixed(3) + '</div>' +
       '<div>Area: ' + (det.area_km2 || '-') + ' km\u00B2 \u00b7 Confidence: ' + (det.confidence || '-') + '%</div>' +
-      '<div style="margin-top:6px;opacity:0.7;font-size:10px;">Candidate: MT SAGAR \u00b7 87% attribution</div>' +
+      '<div>Possible cause: <b>' + ((inc.cause && inc.cause.icon) || '') + ' ' + ((inc.cause && inc.cause.scenario) || 'Analyzing...') + '</b>' + (inc.cause && inc.cause.confidence ? ' \u00b7 ' + inc.cause.confidence + '%' : '') + '</div>' +'<div style="margin-top:6px;opacity:0.7;font-size:10px;">Candidate: MT SAGAR \u00b7 87% attribution</div>' +
       '<div style="margin-top:8px;display:flex;gap:6px;">' +
         '<button id="oeToastGo" style="flex:1;padding:5px 8px;background:rgba(255,71,87,0.15);border:1px solid #ff4757;color:#ff4757;border-radius:3px;cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:0.08em;">VIEW INCIDENT</button>' +
         '<button id="oeToastX" style="flex:0 0 60px;padding:5px 8px;background:transparent;border:1px solid rgba(92,114,134,0.5);color:#5c7286;border-radius:3px;cursor:pointer;font-family:inherit;font-size:10px;">CLOSE</button>' +

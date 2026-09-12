@@ -78,7 +78,7 @@
         '<div>Environmental</div><div>' + bar(ev.environmental, '#5cc9f5') + '</div>' +
       '</div>' +
       '<div style="border-top:1px dashed rgba(92,114,134,0.35);padding-top:6px;margin-bottom:8px;">' +
-        '<div><b>Possible cause:</b> Collision Accident <span style="opacity:0.7;">(78% confidence)</span></div>' +
+        '<div><b>Possible cause:</b> ' + ((inc.cause && inc.cause.icon) || '') + ' ' + ((inc.cause && inc.cause.scenario) || 'Analyzing...') + ' <span style="opacity:0.7;">(' + ((inc.cause && inc.cause.confidence) || '-') + '% confidence)</span></div>' +
         '<div><b>Risk:</b> HIGH \u00b7 <b>Overall evidence score:</b> <span style="color:#4a9eff;">' + overallScore + '%</span></div>' +
         '<div><b>Probable source:</b> MT SAGAR \u00b7 87% attribution</div>' +
         '<div style="opacity:0.7;">Lat/Lon: ' + (det.lat||0).toFixed(3) + ', ' + (det.lon||0).toFixed(3) +
