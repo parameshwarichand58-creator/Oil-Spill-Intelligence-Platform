@@ -122,6 +122,29 @@
     return best ? 1 : 0;
   }
 
+  // --- Recommended action text ---
+  function readRecommendedAction(){
+    try {
+      var all = document.querySelectorAll('div, section, article, p');
+      for (var i=0;i<all.length;i++){
+        var el = all[i];
+        var t = (el.textContent || '').trim();
+        if (t.length < 30 || t.length > 800) continue;
+        if (t.toUpperCase().indexOf('RECOMMENDED ACTION') >= 0){
+          var s = t.replace(/RECOMMENDED ACTION/i, '').trim();
+          if (s.length > 20) return s;
+        }
+      }
+      for (var j=0;j<all.length;j++){
+        var t2 = (all[j].textContent || '').trim();
+        if (t2.length >= 30 && t2.length <= 800 && t2.toUpperCase().indexOf('IMMEDIATE CLOSURE') >= 0){
+          return t2;
+        }
+      }
+    } catch(e){}
+    return 'Immediate closure of all downstream fishing zones. Public health advisory to coastal communities. Deploy seafood testing teams within 12 hours.';
+  }
+
   // --- Alert auto-ring ---
   function startAlertLoop(inc){
     var now = Date.now();
@@ -129,12 +152,10 @@
     lastStartAttempt = now;
 
     if (!isOnAlertSection()) return;
-    if (!inc || !inc.cause || !inc.cause.scenario) return;
 
-    var msg = 'Alert. ' + inc.cause.scenario + ' detected.';
+    var msg = readRecommendedAction();
     if (window.oceaneyeVoice && window.oceaneyeVoice.startLoop){
       window.oceaneyeVoice.startLoop(msg);
-      // reflect state on the START button
       var btn = document.getElementById('voiceAlertStart');
       if (btn){
         btn.textContent = '\uD83D\uDD0A VOICE ALERT: ON';
@@ -142,7 +163,7 @@
         btn.style.borderColor = 'rgba(0,212,170,0.55)';
         btn.style.color = '#00d4aa';
       }
-      console.log('[alert-auto] loop started:', msg);
+      console.log('[alert-auto] loop started (recommended action)');
     }
   }
 
