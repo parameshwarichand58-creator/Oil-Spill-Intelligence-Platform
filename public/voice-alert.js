@@ -1,14 +1,16 @@
-/* OCEAN EYE - Voice Engine
-   Exposes window.oceaneyeVoice with speakOnce / startLoop / stopAll / isPlaying.
-   No UI here — buttons live in the sections that need them.
+/* OCEAN EYE - Voice Alert (original behavior)
+   - START button in Food Safety panel -> speaks recommended action, loops
+   - STOP button -> silences
+   - Nothing auto-triggers
 */
 (function(){
   'use strict';
-  var loopTimer = null;
-  var loopMsg = '';
-  var playing = false;
 
-  function _speak(text){
+  var voiceEnabled = false;
+  var ALERT_TEXT = 'IMMEDIATE CLOSURE of all downstream fishing zones. Public health advisory to coastal communities. Deploy seafood testing teams within 12 hours.';
+  var loopTimer = null;
+
+  function speakOnce(text){
     try {
       if (!window.speechSynthesis || !text) return;
       window.speechSynthesis.cancel();
@@ -18,39 +20,53 @@
     } catch(e){}
   }
 
-  function speakOnce(text){
-    stopAll();
-    _speak(text);
-    playing = true;
-    setTimeout(function(){ playing = false; }, 8000);
+  function readActionText(){
+    try {
+      var all = document.querySelectorAll('div, section, article, p');
+      for (var i=0;i<all.length;i++){
+        var el = all[i];
+        var t = (el.textContent || '').trim();
+        if (t.length < 30 || t.length > 800) continue;
+        if (t.toUpperCase().indexOf('RECOMMENDED ACTION') >= 0){
+          var s = t.replace(/RECOMMENDED ACTION/i, '').trim();
+          if (s.length > 20) return s;
+        }
+      }
+      for (var j=0;j<all.length;j++){
+        var t2 = (all[j].textContent || '').trim();
+        if (t2.length >= 30 && t2.length <= 800 && t2.toUpperCase().indexOf('IMMEDIATE CLOSURE') >= 0){
+          return t2;
+        }
+      }
+    } catch(e){}
+    return '';
   }
 
-  function startLoop(text, everyMs){
-    stopAll();
-    loopMsg = text || '';
-    if (!loopMsg) return;
-    playing = true;
-    _speak(loopMsg);
-    var interval = everyMs || 9000;
+  function start(){
+    voiceEnabled = true;
+    var msg = readActionText() || ALERT_TEXT;
+    speakOnce(msg);
+    if (loopTimer) clearInterval(loopTimer);
     loopTimer = setInterval(function(){
-      if (!loopMsg) return;
-      _speak(loopMsg);
-    }, interval);
+      if (!voiceEnabled){ clearInterval(loopTimer); loopTimer = null; return; }
+      speakOnce(msg);
+    }, 9000);
   }
 
-  function stopAll(){
-    loopMsg = '';
-    playing = false;
+  function stop(){
+    voiceEnabled = false;
     if (loopTimer){ clearInterval(loopTimer); loopTimer = null; }
-    try { window.speechSynthesis.cancel(); } catch(e){}
+    try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch(e){}
   }
 
   window.oceaneyeVoice = {
     speakOnce: speakOnce,
-    startLoop: startLoop,
-    stopAll: stopAll,
-    isPlaying: function(){ return playing; }
+    startLoop: function(msg){ speakOnce(msg); },
+    stopAll: stop,
+    start: start,
+    stop: stop,
+    isOn: function(){ return voiceEnabled; }
   };
 
-  console.log('[voice] engine ready');
+  console.log('[voice] armed — manual START/STOP only');
 })();
