@@ -60,13 +60,7 @@
     card.style.outlineOffset = '2px';
     card.style.boxShadow = '0 0 24px rgba(74,158,255,0.65)';
     card.style.transition = 'all 0.3s';
-    var old = card.querySelectorAll('.oceaneye-ai-tag');
-    for (var k=0;k<old.length;k++) old[k].parentNode.removeChild(old[k]);
-    var tag = document.createElement('div');
-    tag.className = 'oceaneye-ai-tag';
-    tag.style.cssText = 'margin-top:6px;font-family:"Share Tech Mono",monospace;font-size:10px;letter-spacing:0.10em;color:#4a9eff;text-transform:uppercase;font-weight:bold;';
-    tag.textContent = '\u25C9 AI DETECTED \u00B7 ' + scenario + ' \u00B7 ' + (conf||'--') + '%';
-    card.appendChild(tag);
+    // no tag injection — the robot avatar is the only announcer
   }
   function findScenarioCard(scenarioName){
     if (!scenarioName) return null;
@@ -222,6 +216,10 @@
   }
 
   // ---- main tick ----
+  function killAllTags(){
+    var tags = document.querySelectorAll('.oceaneye-ai-tag');
+    for (var i=0;i<tags.length;i++) if (tags[i].parentNode) tags[i].parentNode.removeChild(tags[i]);
+  }
   function tick(){
     var inc = window.OceanEye && window.OceanEye.incident && window.OceanEye.incident.get();
     var isAlert = onAlert();
