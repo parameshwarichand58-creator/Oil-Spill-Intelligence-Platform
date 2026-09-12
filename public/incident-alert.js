@@ -117,6 +117,19 @@
       return;
     }
 
+    // Freshness check: only fire the toast for incidents created in the last 15 seconds.
+    // Any older incident (loaded from localStorage on a new page) is treated as already shown.
+    var ageMs = Date.now() - new Date(inc.createdAt || 0).getTime();
+    if (ageMs > 15000){
+      console.log('[incident-alert] stale incident (' + Math.round(ageMs/1000) + 's old) — silent, marking triggered');
+      if (window.OceanEye && window.OceanEye.incident){
+        window.OceanEye.incident.update({
+          alert: { triggered: true, at: new Date().toISOString(), level: riskLevel(det.confidence), silent: true }
+        });
+      }
+      return;
+    }
+
     // mark in store FIRST so the flag persists across page navigations
     if (window.OceanEye && window.OceanEye.incident){
       window.OceanEye.incident.update({
