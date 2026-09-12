@@ -9,5 +9,8 @@
 /* The wrap stays block */
 #oceaneyeRealMapWrap { display: block !important; }
 
-/* Keep our overlays visible (they are divs, not leaflet-containers) */
-#oceaneyeAttrPanel, #oceaneyeSpillCard, #oceaneyeMapToolbar { display: block !important; }
+/* Keep our overlays visible */
+#oceaneyeAttrPanel, #oceaneyeSpillCard, #oceaneyeMapToolbar, #oceaneyeDriftPanel { display: block !important; }
+
+/* Hide the default leaflet zoom control (+/- top-left) because we have our own toolbar */
+.leaflet-control-zoom { display: none !important; }
