@@ -166,9 +166,91 @@
       window.OceanEye.incident.update({ response: resp });
     }
     lastDispatchedId = inc.id;
+    showDispatchAlert(inc);
     console.log('[dispatch] APPROVE received — dispatched for', inc.id);
   }
 
+  // Emergency dispatch alert (toast) with STOP
+  function showDispatchAlert(inc){
+    var old = document.getElementById('oceaneyeDispatchAlert');
+    if (old) old.parentNode.removeChild(old);
+
+    var box = document.createElement('div');
+    box.id = 'oceaneyeDispatchAlert';
+    box.style.cssText = [
+      'position:fixed','top:70px','left:50%','transform:translateX(-50%)',
+      'z-index:100000','min-width:340px','max-width:520px',
+      'background:rgba(20,4,8,0.96)',
+      'border:2px solid #ff4757','border-radius:6px',
+      'font-family:"Share Tech Mono",monospace','font-size:12px',
+      'color:#ffb1b8','padding:12px 16px','line-height:1.5',
+      'box-shadow:0 0 26px rgba(255,71,87,0.55)',
+      'animation:oceaneyeAlertSlide 0.35s ease-out'
+    ].join(';');
+
+    var det = inc.detection || {};
+    var resp = inc.response || {};
+    var unit = resp.unit || {};
+    var dt = inc.cause || {};
+
+    box.innerHTML =
+      '<div style="color:#ff4757;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:8px;font-size:13px;">\uD83D\uDEA8 SEND EMERGENCY DISPATCH ALERT</div>' +
+      '<div><b>' + (inc.id || '-') + '</b> \u00B7 ' + (unit.name || 'Nearest unit') + '</div>' +
+      '<div>Location: ' + (det.lat||0).toFixed(3) + ', ' + (det.lon||0).toFixed(3) +
+        ' \u00B7 Area: ' + (det.area_km2||'-') + ' km\u00B2</div>' +
+      '<div>Cause: ' + (dt.icon||'') + ' ' + (dt.scenario||'Analyzing') +
+        ' \u00B7 Confidence: ' + (det.confidence||'-') + '%</div>' +
+      '<div>ETA: ' + (unit.eta||'-') + ' \u00B7 Status: <b style="color:#ffb142;">EN ROUTE</b></div>' +
+      '<div style="display:flex;gap:8px;margin-top:10px;">' +
+        '<button id="oeDispatchSpeak" style="flex:1;padding:8px 12px;background:rgba(255,71,87,0.15);border:1px solid #ff4757;color:#ff4757;border-radius:3px;cursor:pointer;font-family:inherit;font-size:11px;letter-spacing:0.10em;text-transform:uppercase;">\uD83D\uDD0A SPEAK</button>' +
+        '<button id="oeDispatchStop"  style="flex:1;padding:8px 12px;background:rgba(92,114,134,0.15);border:1px solid #5c7286;color:#cbd5e1;border-radius:3px;cursor:pointer;font-family:inherit;font-size:11px;letter-spacing:0.10em;text-transform:uppercase;">\u23F9 STOP</button>' +
+        '<button id="oeDispatchClose" style="flex:0 0 70px;padding:8px 12px;background:transparent;border:1px solid rgba(92,114,134,0.5);color:#5c7286;border-radius:3px;cursor:pointer;font-family:inherit;font-size:11px;letter-spacing:0.10em;text-transform:uppercase;">CLOSE</button>' +
+      '</div>';
+
+    document.body.appendChild(box);
+
+    var msg = 'Emergency dispatch alert. ' + (unit.name || 'Nearest unit') +
+              ' dispatched to incident ' + (inc.id || '') +
+              '. Estimated time of arrival ' + (unit.eta || '') +
+              '. Cause: ' + (dt.scenario || '') + '.';
+
+    document.getElementById('oeDispatchSpeak').onclick = function(){
+      if (window.oceaneyeVoice && window.oceaneyeVoice.speakOnce){
+        window.oceaneyeVoice.speakOnce(msg);
+      } else if (window.speechSynthesis){
+        window.speechSynthesis.cancel();
+        var u = new SpeechSynthesisUtterance(msg);
+        window.speechSynthesis.speak(u);
+      }
+      console.log('[dispatch] spoke emergency alert');
+    };
+
+    document.getElementById('oeDispatchStop').onclick = function(){
+      // Stop ALL voice — including any loop still running from Alert page
+      if (window.oceaneyeVoice && window.oceaneyeVoice.stopAll){
+        window.oceaneyeVoice.stopAll();
+      } else if (window.speechSynthesis){
+        window.speechSynthesis.cancel();
+      }
+      console.log('[dispatch] voice stopped');
+    };
+
+    document.getElementById('oeDispatchClose').onclick = function(){
+      // Stop voice + remove box
+      if (window.oceaneyeVoice && window.oceaneyeVoice.stopAll){
+        window.oceaneyeVoice.stopAll();
+      } else if (window.speechSynthesis){
+        window.speechSynthesis.cancel();
+      }
+      if (box.parentNode) box.parentNode.removeChild(box);
+      console.log('[dispatch] alert closed');
+    };
+  }
+
+  function hideDispatchAlert(){
+    var box = document.getElementById('oceaneyeDispatchAlert');
+    if (box && box.parentNode) box.parentNode.removeChild(box);
+  }
   function subscribe(){
     if (!window.OceanEye || !window.OceanEye.incident) return setTimeout(subscribe, 500);
     window.OceanEye.incident.subscribe(function(inc){
