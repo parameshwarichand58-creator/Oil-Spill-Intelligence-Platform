@@ -16,7 +16,7 @@
     var card = document.createElement('div');
     card.id = 'oceaneyeSpillCard';
     card.style.cssText = [
-      'position:absolute','left:12px','top:12px','z-index:1000',
+      'position:absolute','left:12px','top:210px','z-index:1200',
       'background:rgba(6,20,32,0.92)',
       'border:1px solid rgba(255,71,87,0.65)','border-radius:4px',
       'font-family:"Share Tech Mono",monospace','font-size:11px',

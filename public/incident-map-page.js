@@ -171,7 +171,7 @@
 
     var wrap = document.createElement('div');
     wrap.id = 'oceaneyeRealMapWrap';
-    wrap.style.cssText = 'position:relative;width:'+w+'px;height:'+h+'px;';
+    wrap.style.cssText = 'position:relative;width:100%;height:100%;min-height:500px;overflow:visible;';
     wrap.__origMapContainer = orig;
 
     var box = document.createElement('div');

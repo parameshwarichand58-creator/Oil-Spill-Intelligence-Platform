@@ -22,7 +22,7 @@
     var panel = document.createElement('div');
     panel.id = 'oceaneyeDriftPanel';
     panel.style.cssText = [
-      'position:absolute','left:12px','bottom:56px','z-index:1000',
+      'position:absolute','left:12px','top:60px','z-index:1200',
       'width:230px','background:rgba(6,20,32,0.92)',
       'border:1px solid rgba(74,158,255,0.55)','border-radius:4px',
       'font-family:"Share Tech Mono",monospace','font-size:11px',

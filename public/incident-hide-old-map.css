@@ -1,16 +1,20 @@
 /* Hide ALL old simulated leaflet maps */
 .leaflet-container { display: none !important; }
 
-/* Exception: our real map body and everything inside it */
+/* Exception: our real map */
 #oceaneyeRealMapBody,
 #oceaneyeRealMapBody.leaflet-container,
 #oceaneyeRealMapBody .leaflet-container { display: block !important; }
 
-/* The wrap stays block */
-#oceaneyeRealMapWrap { display: block !important; }
+/* The wrap */
+#oceaneyeRealMapWrap { display: block !important; overflow: visible !important; position: relative !important; }
 
-/* Keep our overlays visible */
-#oceaneyeAttrPanel, #oceaneyeSpillCard, #oceaneyeMapToolbar, #oceaneyeDriftPanel { display: block !important; }
+/* Overlays - keep visible */
+#oceaneyeAttrPanel, #oceaneyeSpillCard, #oceaneyeMapToolbar, #oceaneyeDriftPanel {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
 
-/* Hide the default leaflet zoom control (+/- top-left) because we have our own toolbar */
+/* Default leaflet zoom controls — hidden (we have custom toolbar) */
 .leaflet-control-zoom { display: none !important; }
