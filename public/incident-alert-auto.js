@@ -124,7 +124,7 @@
   }
 
   // ---- STOP panel ----
-  function buildStopPanel(scenario){
+    function buildStopPanel(scenario){
     var old = document.getElementById('oceaneyeRobotPanel');
     if (old) old.parentNode.removeChild(old);
 
