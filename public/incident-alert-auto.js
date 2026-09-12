@@ -1,76 +1,36 @@
-/* OCEAN EYE - Auto Alert (v4)
-   Satellite section   -> visual scenario banner, NO voice
-   Alert section       -> auto-ring loops "Alert. <Scenario> detected." until STOP
-   Other sections      -> silent
+/* OCEAN EYE - Alert Auto (robot voice loop + STOP + advisory)
+   - On Alert section: robot avatar voice auto-loops until STOP
+   - Food Safety START/STOP is handled by incident-food-safety-voice.js
+   - Sends public health advisory to coastal communities
 */
 (function(){
   'use strict';
-  var lastHandledId = null;
-  var lastStartAttempt = 0;
+  var lastRobotId = null;
+  var ROBOT_KEY = 'oceaneye.robotLoopRunning';
 
-  function isOnSatelliteSection(){
-    var nodes = document.querySelectorAll('h1,h2,h3,h4');
-    for (var i=0;i<nodes.length;i++){
-      var el = nodes[i];
-      var t = (el.textContent || '').trim();
-      if (t === 'Satellite Analysis' || t === 'Satellite Status'){
-        if (el.offsetParent !== null) return true;
-      }
-    }
-    return false;
-  }
+  function isVisible(el){ return el && el.offsetParent !== null; }
 
   function isOnAlertSection(){
-    var nodes = document.querySelectorAll('h1,h2,h3,h4');
-    for (var i=0;i<nodes.length;i++){
-      var el = nodes[i];
-      var t = (el.textContent || '').trim();
-      if (t === 'Alert System' || t === 'Select Scenario'){
-        if (el.offsetParent !== null) return true;
-      }
-    }
-    // fallback: scan for any visible element matching
-    var all = document.querySelectorAll('div,span,p');
-    for (var j=0;j<all.length;j++){
-      var e2 = all[j];
-      var t2 = (e2.textContent || '').trim();
-      if ((t2 === 'Select Scenario' || t2 === 'Alert System') && e2.offsetParent !== null){
-        return true;
-      }
+    var h = document.querySelectorAll('h1,h2,h3,h4');
+    for (var i=0;i<h.length;i++){
+      var t = (h[i].textContent || '').trim();
+      if (!isVisible(h[i])) continue;
+      if (t === 'Alert System' || t === 'Select Scenario') return true;
     }
     return false;
   }
 
-  // --- Satellite banner ---
-  function showSatelliteBanner(inc){
-    if (!isOnSatelliteSection()) return;
-    var old = document.getElementById('oceaneyeSatBanner');
-    if (old) old.parentNode.removeChild(old);
-    if (!inc || !inc.cause || !inc.cause.scenario) return;
-
-    var b = document.createElement('div');
-    b.id = 'oceaneyeSatBanner';
-    b.style.cssText = [
-      'position:fixed','top:70px','left:50%','transform:translateX(-50%)',
-      'z-index:9998','padding:10px 18px',
-      'background:rgba(74,158,255,0.15)',
-      'border:1px solid #4a9eff','border-radius:4px',
-      'font-family:"Share Tech Mono",monospace','font-size:13px',
-      'letter-spacing:0.10em','color:#4a9eff','text-transform:uppercase',
-      'box-shadow:0 0 18px rgba(74,158,255,0.35)',
-      'pointer-events:none'
-    ].join(';');
-    b.textContent = '\u26A1 Detected: ' + inc.cause.scenario +
-                    (inc.cause.confidence ? ' \u00B7 ' + inc.cause.confidence + '%' : '');
-    document.body.appendChild(b);
+  function isOnSatelliteSection(){
+    var h = document.querySelectorAll('h1,h2,h3,h4');
+    for (var i=0;i<h.length;i++){
+      var t = (h[i].textContent || '').trim();
+      if (!isVisible(h[i])) continue;
+      if (t === 'Satellite Analysis' || t === 'Satellite Status') return true;
+    }
+    return false;
   }
 
-  function clearSatelliteBanner(){
-    var old = document.getElementById('oceaneyeSatBanner');
-    if (old) old.parentNode.removeChild(old);
-  }
-
-  // --- Alert highlight ---
+  // --- highlight scenario card ---
   function clearHighlight(){
     var all = document.querySelectorAll('.oceaneye-scenario-hl');
     for (var i=0;i<all.length;i++){
@@ -78,177 +38,192 @@
       all[i].style.outline = '';
       all[i].style.boxShadow = '';
       var tags = all[i].querySelectorAll('.oceaneye-ai-tag');
-      for (var k=0;k<tags.length;k++) if (tags[k].parentNode) tags[k].parentNode.removeChild(tags[k]);
+      for (var k=0;k<tags.length;k++) tags[k].parentNode.removeChild(tags[k]);
     }
   }
-
-  function applyGlow(el, conf){
-    el.classList.add('oceaneye-scenario-hl');
-    el.style.outline = '2px solid #4a9eff';
-    el.style.boxShadow = '0 0 18px rgba(74,158,255,0.55)';
-    var existing = el.querySelectorAll('.oceaneye-ai-tag');
-    for (var z=0;z<existing.length;z++) existing[z].parentNode.removeChild(existing[z]);
+  function highlightScenario(label, conf){
+    clearHighlight();
+    if (!label) return;
+    var needle = label.toLowerCase().trim();
+    var all = document.querySelectorAll('div,button,li,article,section');
+    var cands = [];
+    for (var i=0;i<all.length;i++){
+      var el = all[i];
+      if (el.id && el.id.indexOf('oceaneye') === 0) continue;
+      if (el.closest && (el.closest('#oceaneyeAlertToast') || el.closest('#oceaneyeRealMapWrap') || el.closest('#oceaneyeReviewCase') || el.closest('#oceaneyeRobotPanel'))) continue;
+      var t = (el.textContent || '').trim();
+      if (!t || t.length > 220) continue;
+      if (t.toLowerCase().indexOf(needle) >= 0) cands.push(el);
+    }
+    var leaves = cands.filter(function(el){ return !cands.some(function(o){ return o !== el && el.contains(o); }); });
+    var best = null;
+    for (var j=0;j<leaves.length;j++){ if (!best || leaves[j].textContent.length > best.textContent.length) best = leaves[j]; }
+    if (!best) return;
+    best.classList.add('oceaneye-scenario-hl');
+    best.style.outline = '2px solid #4a9eff';
+    best.style.boxShadow = '0 0 18px rgba(74,158,255,0.55)';
     var tag = document.createElement('span');
     tag.className = 'oceaneye-ai-tag';
     tag.style.cssText = 'display:block;margin-top:6px;font-family:"Share Tech Mono",monospace;font-size:9px;letter-spacing:0.10em;color:#4a9eff;text-transform:uppercase;';
     tag.textContent = '\u25C9 AI SELECTED \u00B7 ' + (conf || '--') + '%';
-    el.appendChild(tag);
+    best.appendChild(tag);
   }
 
-  function highlightScenario(label, conf){
-    clearHighlight();
-    if (!label) return 0;
-    var needle = label.toLowerCase().trim();
-    var all = document.querySelectorAll('div, button, li, article, section');
-    var candidates = [];
-    for (var i=0;i<all.length;i++){
-      var el = all[i];
-      if (el.id && el.id.indexOf('oceaneye') === 0) continue;
-      if (el.closest && el.closest('#oceaneyeAlertToast')) continue;
-      if (el.closest && el.closest('#oceaneyeRealMapWrap')) continue;
-      if (el.closest && el.closest('#oceaneyeReviewCase')) continue;
-      var txt = (el.textContent || '').trim();
-      if (txt.length === 0 || txt.length > 220) continue;
-      if (txt.toLowerCase().indexOf(needle) >= 0) candidates.push(el);
-    }
-    var leaves = candidates.filter(function(el){
-      return !candidates.some(function(o){ return o !== el && el.contains(o); });
-    });
-    var best = null;
-    for (var j=0;j<leaves.length;j++){
-      if (!best || leaves[j].textContent.length > best.textContent.length) best = leaves[j];
-    }
-    if (best) applyGlow(best, conf);
-    return best ? 1 : 0;
+  // --- robot voice loop with STOP ---
+  function buildRobotPanel(msg){
+    var old = document.getElementById('oceaneyeRobotPanel');
+    if (old) old.parentNode.removeChild(old);
+
+    var box = document.createElement('div');
+    box.id = 'oceaneyeRobotPanel';
+    box.style.cssText = [
+      'position:fixed','bottom:12px','right:12px','z-index:9999',
+      'display:flex','align-items:center','gap:10px',
+      'padding:8px 12px',
+      'background:rgba(6,20,32,0.95)',
+      'border:1px solid rgba(74,158,255,0.55)','border-radius:4px',
+      'font-family:"Share Tech Mono",monospace','font-size:11px',
+      'color:#4a9eff','letter-spacing:0.08em',
+      'box-shadow:0 0 14px rgba(74,158,255,0.25)'
+    ].join(';');
+
+    var label = document.createElement('div');
+    label.innerHTML = '\uD83E\uDD16 <b>ROBOT ALERT</b> \u00B7 RINGING';
+    label.style.cssText = 'flex:1;';
+
+    var stopBtn = document.createElement('button');
+    stopBtn.type = 'button';
+    stopBtn.textContent = '\u23F9 STOP';
+    stopBtn.style.cssText = 'padding:6px 12px;background:rgba(255,71,87,0.15);border:1px solid #ff4757;color:#ff4757;border-radius:3px;cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:0.10em;text-transform:uppercase;';
+    stopBtn.onclick = function(){
+      if (window.oceaneyeVoice) window.oceaneyeVoice.stopAll();
+      localStorage.removeItem(ROBOT_KEY);
+      if (box.parentNode) box.parentNode.removeChild(box);
+      console.log('[robot] stopped');
+    };
+
+    box.appendChild(label);
+    box.appendChild(stopBtn);
+    document.body.appendChild(box);
   }
 
-  // --- Recommended action text ---
-  function readRecommendedAction(){
-    try {
-      var all = document.querySelectorAll('div, section, article, p');
-      for (var i=0;i<all.length;i++){
-        var el = all[i];
-        var t = (el.textContent || '').trim();
-        if (t.length < 30 || t.length > 800) continue;
-        if (t.toUpperCase().indexOf('RECOMMENDED ACTION') >= 0){
-          var s = t.replace(/RECOMMENDED ACTION/i, '').trim();
-          if (s.length > 20) return s;
+  function removeRobotPanel(){
+    var p = document.getElementById('oceaneyeRobotPanel');
+    if (p) p.parentNode.removeChild(p);
+  }
+
+  function robotMessage(inc){
+    var parts = ['Alert.'];
+    if (inc.cause && inc.cause.scenario) parts.push(inc.cause.scenario + ' detected.');
+    if (inc.cause && inc.cause.confidence) parts.push('Confidence ' + inc.cause.confidence + ' percent.');
+    return parts.join(' ');
+  }
+
+  function triggerRobot(inc){
+    if (!isOnAlertSection()) return false;
+    if (!inc || inc.status !== 'DETECTED') return false;
+    if (inc.id === lastRobotId && localStorage.getItem(ROBOT_KEY) === '1') return false;
+
+    var msg = robotMessage(inc);
+    if (window.oceaneyeVoice) window.oceaneyeVoice.startLoop(msg, 9000);
+    buildRobotPanel(msg);
+    localStorage.setItem(ROBOT_KEY, '1');
+    lastRobotId = inc.id;
+    console.log('[robot] loop started for', inc.id);
+    return true;
+  }
+
+  function stopRobotIfOffAlert(){
+    if (isOnAlertSection()) return;
+    if (localStorage.getItem(ROBOT_KEY) === '1'){
+      if (window.oceaneyeVoice) window.oceaneyeVoice.stopAll();
+      localStorage.removeItem(ROBOT_KEY);
+      removeRobotPanel();
+    }
+  }
+
+  // --- satellite banner ---
+  function showSatelliteBanner(inc){
+    var old = document.getElementById('oceaneyeSatBanner');
+    if (old) old.parentNode.removeChild(old);
+    if (!inc || !inc.cause || !inc.cause.scenario) return;
+    var b = document.createElement('div');
+    b.id = 'oceaneyeSatBanner';
+    b.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:9998;padding:10px 18px;background:rgba(74,158,255,0.15);border:1px solid #4a9eff;border-radius:4px;font-family:"Share Tech Mono",monospace;font-size:13px;letter-spacing:0.10em;color:#4a9eff;text-transform:uppercase;box-shadow:0 0 18px rgba(74,158,255,0.35);pointer-events:none;';
+    b.textContent = '\u26A1 Detected: ' + inc.cause.scenario + (inc.cause.confidence ? ' \u00B7 ' + inc.cause.confidence + '%' : '');
+    document.body.appendChild(b);
+  }
+  function clearSatelliteBanner(){
+    var o = document.getElementById('oceaneyeSatBanner');
+    if (o) o.parentNode.removeChild(o);
+  }
+
+  // --- advisory to coastal communities ---
+  function sendCommunityAdvisory(inc){
+    if (!inc || !inc.cause) return;
+    if (inc.advisory && inc.advisory.sent) return;
+    var communities = ['Kovalam','Mahabalipuram','Puducherry','Cuddalore','Nagapattinam','Rameswaram'];
+    var entry = {
+      sent: true,
+      at: new Date().toISOString(),
+      message: 'Public health advisory issued. Coastal fishing communities advised to halt fishing and consumption until further notice.',
+      communities: communities,
+      source: 'OCEAN EYE · Food Safety Advisory',
+      incidentId: inc.id
+    };
+    if (window.OceanEye && window.OceanEye.incident){
+      window.OceanEye.incident.update({ advisory: entry });
+    }
+
+    // try to inject into a visible "coastal communities" area
+    var anchors = document.querySelectorAll('div,section,article');
+    for (var i=0;i<anchors.length;i++){
+      var el = anchors[i];
+      var t = (el.textContent || '');
+      if (el.offsetParent === null) continue;
+      if (t.toUpperCase().indexOf('COASTAL COMMUNITIES AT RISK') >= 0 && t.length < 800){
+        var note = el.querySelector('.oceaneye-advisory-sent');
+        if (!note){
+          note = document.createElement('div');
+          note.className = 'oceaneye-advisory-sent';
+          note.style.cssText = 'margin-top:8px;padding:6px 10px;background:rgba(74,158,255,0.10);border-left:3px solid #4a9eff;border-radius:3px;font-family:"Share Tech Mono",monospace;font-size:10px;color:#4a9eff;letter-spacing:0.06em;';
+          note.textContent = '\u25C9 ADVISORY SENT \u00B7 ' + new Date().toLocaleTimeString() + ' \u00B7 ' + communities.join(', ');
+          el.appendChild(note);
         }
-      }
-      for (var j=0;j<all.length;j++){
-        var t2 = (all[j].textContent || '').trim();
-        if (t2.length >= 30 && t2.length <= 800 && t2.toUpperCase().indexOf('IMMEDIATE CLOSURE') >= 0){
-          return t2;
-        }
-      }
-    } catch(e){}
-    return 'Immediate closure of all downstream fishing zones. Public health advisory to coastal communities. Deploy seafood testing teams within 12 hours.';
-  }
-
-  // --- Alert auto-ring ---
-  function startAlertLoop(inc){
-    var now = Date.now();
-    if (now - lastStartAttempt < 3000) return;
-    lastStartAttempt = now;
-
-    if (!isOnAlertSection()) return;
-
-    var msg = readRecommendedAction();
-    if (window.oceaneyeVoice && window.oceaneyeVoice.startLoop){
-      window.oceaneyeVoice.startLoop(msg);
-      var btn = document.getElementById('voiceAlertStart');
-      if (btn){
-        btn.textContent = '\uD83D\uDD0A VOICE ALERT: ON';
-        btn.style.background = 'rgba(0,212,170,0.12)';
-        btn.style.borderColor = 'rgba(0,212,170,0.55)';
-        btn.style.color = '#00d4aa';
-      }
-      console.log('[alert-auto] loop started (recommended action)');
-    }
-  }
-
-  // --- Recent alerts entry ---
-  function addRecentAlert(inc){
-    var list = document.querySelector('#recentAlertsList, .recent-alerts-list, [data-recent-alerts], #recent-alerts');
-    if (!list){
-      var heads = document.querySelectorAll('h1,h2,h3,h4');
-      for (var i=0;i<heads.length;i++){
-        if (/recent alerts/i.test(heads[i].textContent || '')){
-          var sec = heads[i].closest('div, section');
-          if (sec){ var cand = sec.querySelector('ul, ol, [role="list"]'); if (cand){ list = cand; break; } }
-        }
+        break;
       }
     }
-    if (!list) list = document.querySelector('.alert-list, .alerts-list');
-    if (!list) return;
-    if (list.querySelector('[data-incident="' + inc.id + '"]')) return;
-
-    var li = document.createElement('div');
-    li.setAttribute('data-incident', inc.id);
-    li.style.cssText = 'padding:8px 10px;margin:6px 0;background:rgba(74,158,255,0.08);border-left:3px solid #4a9eff;border-radius:3px;font-family:"Share Tech Mono",monospace;font-size:11px;color:#cbd5e1;';
-    var t = new Date().toLocaleTimeString();
-    var label = (inc.cause && inc.cause.scenario) ? inc.cause.scenario.toUpperCase() : 'ANALYZING';
-    var icon  = (inc.cause && inc.cause.icon) || '';
-    li.innerHTML =
-      '<div style="color:#4a9eff;font-weight:bold;">' + t + ' \u00B7 ' + icon + ' ' + label + '</div>' +
-      '<div style="opacity:0.75;">Incident ' + inc.id + ' \u00B7 auto-triggered \u00B7 ' +
-        ((inc.detection && inc.detection.confidence) || '--') + '% confidence</div>';
-    list.insertBefore(li, list.firstChild);
+    console.log('[advisory] sent to', communities.length, 'communities for', inc.id);
   }
 
-  // --- Dispatch ---
   function handle(inc){
-    var onAlert = isOnAlertSection();
-    var onSat   = isOnSatelliteSection();
+    if (!inc){ return; }
 
-    // Voice panel visibility
-    if (window.oceaneyeVoice && window.oceaneyeVoice.showPanel){
-      if (onAlert) window.oceaneyeVoice.showPanel();
-      else window.oceaneyeVoice.hidePanel();
-    }
+    if (isOnSatelliteSection() && inc.status === 'DETECTED') showSatelliteBanner(inc);
+    else clearSatelliteBanner();
 
-    // Satellite banner
-    if (onSat && inc && inc.status === 'DETECTED'){
-      showSatelliteBanner(inc);
-    } else {
-      clearSatelliteBanner();
-    }
-
-    // Alert section: highlight + loop
-    if (onAlert && inc && inc.status === 'DETECTED' && inc.cause && inc.cause.scenario){
+    if (isOnAlertSection() && inc.status === 'DETECTED' && inc.cause && inc.cause.scenario){
       highlightScenario(inc.cause.scenario, inc.cause.confidence);
-      addRecentAlert(inc);
-      if (inc.id !== lastHandledId){
-        lastHandledId = inc.id;
-        startAlertLoop(inc);
-      }
+      if (inc.id !== lastRobotId) triggerRobot(inc);
+      sendCommunityAdvisory(inc);
     } else {
       clearHighlight();
-    }
-
-    // If user left the alert page, stop the auto-loop
-    if (!onAlert){
-      if (window.oceaneyeVoice && window.oceaneyeVoice.isOn && window.oceaneyeVoice.isOn()){
-        window.oceaneyeVoice.stopAll();
-        console.log('[alert-auto] left alert section — stopped loop');
-      }
+      stopRobotIfOffAlert();
     }
   }
 
   function subscribe(){
     if (!window.OceanEye || !window.OceanEye.incident) return setTimeout(subscribe, 500);
     window.OceanEye.incident.subscribe(handle);
-    console.log('[alert-auto v4] subscribed');
+    console.log('[alert-auto] subscribed');
   }
 
-  // periodic re-check on section change
   setInterval(function(){
     var inc = window.OceanEye && window.OceanEye.incident && window.OceanEye.incident.get();
-    if (!inc || inc.status !== 'DETECTED') return;
-    handle(inc);
-  }, 1500);
+    if (inc) handle(inc);
+  }, 1800);
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', subscribe);
   else subscribe();
-  console.log('[alert-auto v4] armed — satellite visual only, alert loops scenario');
+  console.log('[alert-auto] armed');
 })();
