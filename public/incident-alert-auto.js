@@ -134,20 +134,20 @@
       'position:fixed','bottom:12px','right:12px','z-index:9999',
       'display:flex','align-items:center','gap:10px',
       'padding:10px 14px','background:rgba(6,20,32,0.95)',
-      'border:1px solid rgba(74,158,255,0.6)','border-radius:4px',
+      'border:1px solid rgba(255,71,87,0.6)','border-radius:4px',
       'font-family:"Share Tech Mono",monospace','font-size:11px',
-      'color:#4a9eff','letter-spacing:0.08em',
-      'box-shadow:0 0 16px rgba(74,158,255,0.35)'
+      'color:#ff4757','letter-spacing:0.10em',
+      'box-shadow:0 0 16px rgba(255,71,87,0.35)'
     ].join(';');
 
     var label = document.createElement('div');
-    label.innerHTML = '\uD83E\uDD16 <b>ALERT RINGING</b> \u00B7 ' + (scenario || '').toUpperCase();
+    label.innerHTML = '\uD83D\uDD14 <b>RINGING</b> \u00B7 ' + (scenario || '').toUpperCase();
     label.style.cssText = 'flex:1;';
 
     var stopBtn = document.createElement('button');
     stopBtn.type = 'button';
     stopBtn.textContent = '\u23F9 STOP';
-    stopBtn.style.cssText = 'padding:6px 12px;background:rgba(255,71,87,0.15);border:1px solid #ff4757;color:#ff4757;border-radius:3px;cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:0.10em;text-transform:uppercase;';
+    stopBtn.style.cssText = 'padding:8px 16px;background:rgba(255,71,87,0.18);border:1px solid #ff4757;color:#ff4757;border-radius:3px;cursor:pointer;font-family:inherit;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;font-weight:bold;';
     stopBtn.onclick = function(){
       stopLoop();
       if (box.parentNode) box.parentNode.removeChild(box);
