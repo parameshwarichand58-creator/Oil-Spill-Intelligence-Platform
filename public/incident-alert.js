@@ -111,7 +111,13 @@
     if (inc.id === lastAlertedId) return;
     lastAlertedId = inc.id;
 
-    // mark in store
+    // If alert was already triggered for this incident, DO NOT re-fire the toast.
+    if (inc.alert && inc.alert.triggered === true){
+      console.log('[incident-alert] already triggered, skipping toast for', inc.id);
+      return;
+    }
+
+    // mark in store FIRST so the flag persists across page navigations
     if (window.OceanEye && window.OceanEye.incident){
       window.OceanEye.incident.update({
         alert: { triggered: true, at: new Date().toISOString(), level: riskLevel(det.confidence) }
@@ -136,5 +142,14 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', subscribe);
   else subscribe();
+  // On page load: if store says alert already triggered, do not show toast
+(function(){
+  var inc = window.OceanEye && window.OceanEye.incident && window.OceanEye.incident.get();
+  var old = document.getElementById('oceaneyeAlertToast');
+  if (old) old.parentNode.removeChild(old);
+  if (inc && inc.alert && inc.alert.triggered === true){
+    console.log('[incident-alert] clearOnLoad — previous alert already shown');
+  }
+})();
   console.log('[incident-alert] armed');
 })();
