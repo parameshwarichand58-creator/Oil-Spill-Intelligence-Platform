@@ -64,7 +64,34 @@
     if (window.speechSynthesis) window.speechSynthesis.cancel();
   }
 
-  function readActionText(){
+  function buildIncidentMessage(){
+  try {
+    if (window.OceanEye && window.OceanEye.incident){
+      var inc = window.OceanEye.incident.get();
+      if (inc && inc.status === 'DETECTED'){
+        var det = inc.detection || {};
+        var cause = inc.cause || {};
+        var parts = [];
+        parts.push('Warning. An oil spill has been detected.');
+        if (cause.scenario) {
+          parts.push('Possible cause: ' + cause.scenario +
+            (cause.confidence ? ', ' + cause.confidence + ' percent confidence.' : '.'));
+        }
+        if (det.confidence) parts.push('Detection confidence ' + det.confidence + ' percent.');
+        if (det.area_km2) parts.push('Spill area approximately ' + det.area_km2 + ' square kilometers.');
+        if (det.lat !== null && det.lon !== null) {
+          parts.push('Location latitude ' + det.lat + ', longitude ' + det.lon + '.');
+        }
+        parts.push('Candidate vessel MT Sagar, attribution 87 percent.');
+        parts.push('The fishing areas must be closed immediately.');
+        parts.push('Food safety teams need to be deployed to test the fish P A H levels.');
+        return parts.join(' ');
+      }
+    }
+  } catch(e){}
+  return null;
+}
+function readActionText(){
     var el = document.getElementById('fsAction');
     if (!el) return null;
     var t = (el.textContent || '').trim();
@@ -118,7 +145,7 @@
       ev.stopPropagation();
       unlock();
       voiceEnabled = true;
-      var msg = readActionText() || ALERT_TEXT;
+      var msg = buildIncidentMessage() || readActionText() || ALERT_TEXT;
       speak(msg);
       startBtn.textContent = '🔊 VOICE ALERT: ON';
       startBtn.style.background = 'rgba(0,212,170,0.12)';
