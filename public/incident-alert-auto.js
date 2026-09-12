@@ -1,23 +1,24 @@
-/* OCEAN EYE - Alert Auto (v6)
-   On Alert section: auto-click the detected scenario card so its own
-   existing sound plays, then repeat the click every ~9s to loop.
-   STOP panel clears the loop. No custom voice message.
+/* OCEAN EYE - Alert Auto (v7)
+   On Alert section:
+     - Shows robot avatar pop-up near top
+     - Robot voice loops the scenario announcement
+     - No bottom-right panel
+     - Scenario card still glows (no auto-click)
+   Leave Alert section -> everything stops
 */
 (function(){
   'use strict';
   var LOOP_MS = 9000;
-  var ROBOT_KEY = 'oceaneye.scenarioLoopRunning';
+  var ROBOT_KEY = 'oceaneye.robotLoopRunning';
   var lastHandledId = null;
   var loopTimer = null;
 
-  // ---- helpers ----
   function visible(el){
     if (!el) return false;
     if (el.offsetParent === null) return false;
     var r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
   }
-
   function onAlert(){
     var wanted = ['Select Scenario','Alert System','AI-powered scenario simulation'];
     var all = document.querySelectorAll('div,span,h1,h2,h3,h4,p');
@@ -29,7 +30,6 @@
     }
     return false;
   }
-
   function onSatellite(){
     var wanted = ['Satellite Analysis','Satellite Status'];
     var all = document.querySelectorAll('h1,h2,h3,h4');
@@ -41,59 +41,7 @@
     return false;
   }
 
-  // ---- find the scenario card (clickable) ----
-  function findScenarioCard(scenarioName){
-    if (!scenarioName) return null;
-    var needle = scenarioName.toLowerCase().trim();
-    var all = document.querySelectorAll('div,button,article,section,li');
-    var cands = [];
-    for (var i=0;i<all.length;i++){
-      var el = all[i];
-      if (el.id && el.id.indexOf('oceaneye') === 0) continue;
-      if (el.closest && (el.closest('#oceaneyeRobotPanel') || el.closest('#oceaneyeSatBanner'))) continue;
-      if (!visible(el)) continue;
-      var t = (el.textContent || '').trim();
-      if (!t || t.length > 300) continue;
-      if (t.toLowerCase().indexOf(needle) < 0) continue;
-      cands.push(el);
-    }
-    if (!cands.length) return null;
-
-    // Prefer an element that has its own click handler
-    var clickable = cands.filter(function(el){
-      return el.onclick || el.getAttribute('role') === 'button' || el.tagName === 'BUTTON' ||
-             (el.style && el.style.cursor === 'pointer');
-    });
-
-    // Leaves only (no other candidate nested inside)
-    function leaves(arr){
-      return arr.filter(function(el){
-        return !arr.some(function(o){ return o !== el && el.contains(o); });
-      });
-    }
-
-    var useArr = clickable.length ? leaves(clickable) : leaves(cands);
-    // pick biggest leaf — likely the scenario card
-    var best = null;
-    for (var j=0;j<useArr.length;j++){
-      if (!best || useArr[j].textContent.length > best.textContent.length) best = useArr[j];
-    }
-
-    // If the leaf is a text-only element, walk up to find a clickable ancestor
-    if (best && !(best.onclick || best.tagName === 'BUTTON' || best.getAttribute('role') === 'button')){
-      var p = best;
-      for (var k=0;k<5 && p;k++){
-        if (p.onclick || p.tagName === 'BUTTON' || p.getAttribute('role') === 'button'){
-          best = p;
-          break;
-        }
-        p = p.parentElement;
-      }
-    }
-    return best;
-  }
-
-  // ---- highlight ----
+  // ---- highlight scenario card ----
   function clearHL(){
     var all = document.querySelectorAll('.oceaneye-scenario-hl');
     for (var i=0;i<all.length;i++){
@@ -101,12 +49,10 @@
       all[i].style.outline = '';
       all[i].style.outlineOffset = '';
       all[i].style.boxShadow = '';
-      all[i].style.borderColor = '';
       var tags = all[i].querySelectorAll('.oceaneye-ai-tag');
       for (var k=0;k<tags.length;k++) tags[k].parentNode.removeChild(tags[k]);
     }
   }
-
   function glow(card, conf, scenario){
     if (!card) return;
     card.classList.add('oceaneye-scenario-hl');
@@ -122,74 +68,126 @@
     tag.textContent = '\u25C9 AI DETECTED \u00B7 ' + scenario + ' \u00B7 ' + (conf||'--') + '%';
     card.appendChild(tag);
   }
+  function findScenarioCard(scenarioName){
+    if (!scenarioName) return null;
+    var needle = scenarioName.toLowerCase().trim();
+    var all = document.querySelectorAll('div,button,article,section,li');
+    var cands = [];
+    for (var i=0;i<all.length;i++){
+      var el = all[i];
+      if (el.id && el.id.indexOf('oceaneye') === 0) continue;
+      if (el.closest && (el.closest('#oceaneyeRobotPanel') || el.closest('#oceaneyeAlertToast') || el.closest('#oceaneyeReviewCase') || el.closest('#oceaneyeRealMapWrap'))) continue;
+      if (!visible(el)) continue;
+      var t = (el.textContent || '').trim();
+      if (!t || t.length > 140) continue;
+      if (t.toLowerCase().indexOf(needle) < 0) continue;
+      var lower = t.toLowerCase();
+      var others = 0;
+      ['natural seepage','culprit theft','internal failure','collision accident','fire explosion','weather storm'].forEach(function(s){
+        if (s !== needle && lower.indexOf(s) >= 0) others++;
+      });
+      if (others > 0) continue;
+      cands.push(el);
+    }
+    if (!cands.length) return null;
+    var leaves = cands.filter(function(el){ return !cands.some(function(o){ return o !== el && el.contains(o); }); });
+    var best = null;
+    for (var j=0;j<leaves.length;j++){ if (!best || leaves[j].textContent.length > best.textContent.length) best = leaves[j]; }
+    return best;
+  }
 
-  // ---- STOP panel ----
-    function buildStopPanel(scenario){
-    var old = document.getElementById('oceaneyeRobotPanel');
+  // ---- robot avatar pop-up ----
+  function showRobot(scenario, conf){
+    var old = document.getElementById('oceaneyeRobotAvatar');
     if (old) old.parentNode.removeChild(old);
 
     var box = document.createElement('div');
-    box.id = 'oceaneyeRobotPanel';
+    box.id = 'oceaneyeRobotAvatar';
     box.style.cssText = [
-      'position:fixed','bottom:12px','right:12px','z-index:9999',
-      'display:flex','align-items:center','gap:10px',
-      'padding:10px 14px','background:rgba(6,20,32,0.95)',
-      'border:1px solid rgba(255,71,87,0.6)','border-radius:4px',
-      'font-family:"Share Tech Mono",monospace','font-size:11px',
-      'color:#ff4757','letter-spacing:0.10em',
-      'box-shadow:0 0 16px rgba(255,71,87,0.35)'
+      'position:fixed','top:90px','left:50%','transform:translateX(-50%)',
+      'z-index:9999','display:flex','align-items:center','gap:14px',
+      'padding:16px 22px',
+      'background:linear-gradient(135deg,rgba(20,32,48,0.98),rgba(10,18,30,0.98))',
+      'border:2px solid rgba(74,158,255,0.8)','border-radius:10px',
+      'font-family:"Share Tech Mono",monospace','color:#cbd5e1',
+      'box-shadow:0 0 30px rgba(74,158,255,0.5)',
+      'min-width:380px','max-width:560px',
+      'animation:oceaneyeRobotSlide 0.4s ease-out'
     ].join(';');
 
-    var label = document.createElement('div');
-    label.innerHTML = '\uD83D\uDD14 <b>RINGING</b> \u00B7 ' + (scenario || '').toUpperCase();
-    label.style.cssText = 'flex:1;';
+    // robot face
+    var face = document.createElement('div');
+    face.style.cssText = [
+      'width:56px','height:56px','border-radius:50%',
+      'background:radial-gradient(circle at 40% 35%,#7db6ff,#4a9eff 60%,#1a3a66)',
+      'display:flex','align-items:center','justify-content:center',
+      'font-size:32px','box-shadow:0 0 20px rgba(74,158,255,0.8)',
+      'animation:oceaneyeRobotPulse 1.4s infinite ease-in-out',
+      'flex:0 0 56px'
+    ].join(';');
+    face.textContent = '\uD83E\uDD16';
+
+    var body = document.createElement('div');
+    body.style.cssText = 'flex:1;line-height:1.5;';
+    body.innerHTML =
+      '<div style="color:#4a9eff;letter-spacing:0.14em;font-size:11px;text-transform:uppercase;margin-bottom:4px;">\u25C9 AI ALERT \u00B7 SCENARIO DETECTED</div>' +
+      '<div style="color:#fff;font-size:15px;font-weight:bold;letter-spacing:0.06em;">' + (scenario || '').toUpperCase() + '</div>' +
+      '<div style="color:#cbd5e1;font-size:12px;opacity:0.85;margin-top:2px;">Confidence: <b style="color:#00d4aa;">' + (conf||'--') + '%</b> \u00B7 Ringing alert\u2026</div>';
 
     var stopBtn = document.createElement('button');
     stopBtn.type = 'button';
     stopBtn.textContent = '\u23F9 STOP';
-    stopBtn.style.cssText = 'padding:8px 16px;background:rgba(255,71,87,0.18);border:1px solid #ff4757;color:#ff4757;border-radius:3px;cursor:pointer;font-family:inherit;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;font-weight:bold;';
+    stopBtn.style.cssText = 'padding:10px 16px;background:rgba(255,71,87,0.18);border:1px solid #ff4757;color:#ff4757;border-radius:4px;cursor:pointer;font-family:inherit;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;font-weight:bold;flex:0 0 auto;';
     stopBtn.onclick = function(){
       stopLoop();
-      if (box.parentNode) box.parentNode.removeChild(box);
+      hideRobot();
     };
 
-    box.appendChild(label);
+    box.appendChild(face);
+    box.appendChild(body);
     box.appendChild(stopBtn);
     document.body.appendChild(box);
+
+    // inject animation CSS once
+    if (!document.getElementById('oceaneyeRobotAnimStyle')){
+      var st = document.createElement('style');
+      st.id = 'oceaneyeRobotAnimStyle';
+      st.textContent =
+        '@keyframes oceaneyeRobotSlide{from{opacity:0;transform:translate(-50%,-20px);}to{opacity:1;transform:translate(-50%,0);}}' +
+        '@keyframes oceaneyeRobotPulse{0%,100%{box-shadow:0 0 20px rgba(74,158,255,0.8);}50%{box-shadow:0 0 32px rgba(74,158,255,1);}}';
+      document.head.appendChild(st);
+    }
+    console.log('[robot] avatar shown for', scenario);
   }
 
-  function removeStopPanel(){
-    var p = document.getElementById('oceaneyeRobotPanel');
-    if (p) p.parentNode.removeChild(p);
+  function hideRobot(){
+    var el = document.getElementById('oceaneyeRobotAvatar');
+    if (el) el.parentNode.removeChild(el);
   }
 
-  // ---- loop ----
-  function clickCard(card){
-    if (!card) return;
+  // ---- voice loop ----
+  function speak(text){
     try {
-      card.click();
-      // also fire pointer/mouse events for handlers bound via addEventListener
-      var opts = { bubbles: true, cancelable: true, view: window };
-      card.dispatchEvent(new MouseEvent('mousedown', opts));
-      card.dispatchEvent(new MouseEvent('mouseup', opts));
-    } catch(e){ console.warn('[alert-loop] click failed', e); }
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.95; u.pitch = 1.0; u.volume = 1.0;
+      window.speechSynthesis.speak(u);
+    } catch(e){}
   }
 
-  function startLoop(card, scenario){
+  function startLoop(scenario, conf){
     stopLoop();
-    clickCard(card);
-    loopTimer = setInterval(function(){
-      var c = card.isConnected ? card : findScenarioCard(scenario);
-      if (c) clickCard(c);
-    }, LOOP_MS);
+    var msg = 'Alert. ' + scenario + ' detected.';
+    if (conf) msg += ' Confidence ' + conf + ' percent.';
+    speak(msg);
+    loopTimer = setInterval(function(){ speak(msg); }, LOOP_MS);
     localStorage.setItem(ROBOT_KEY, '1');
-    buildStopPanel(scenario);
-    console.log('[alert-loop] started for', scenario);
+    console.log('[robot] voice loop started:', msg);
   }
 
   function stopLoop(){
     if (loopTimer){ clearInterval(loopTimer); loopTimer = null; }
-    if (window.oceaneyeVoice && window.oceaneyeVoice.stopAll) window.oceaneyeVoice.stopAll();
     try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch(e){}
     localStorage.removeItem(ROBOT_KEY);
   }
@@ -210,7 +208,7 @@
     if (o) o.parentNode.removeChild(o);
   }
 
-  // ---- update Last Scenario text ----
+  // ---- Last Scenario text ----
   function setLastScenario(label){
     var all = document.querySelectorAll('div,span,p,h1,h2,h3,h4');
     for (var i=0;i<all.length;i++){
@@ -218,22 +216,6 @@
       if (t === 'LAST SCENARIO'){
         var sib = all[i].nextElementSibling;
         if (sib) sib.textContent = (label || '—').toUpperCase();
-        return;
-      }
-    }
-  }
-
-  // ---- bump Total Alerts number ----
-  function bumpTotalAlerts(){
-    var all = document.querySelectorAll('div,span,h1,h2,h3,h4');
-    for (var i=0;i<all.length;i++){
-      var t = (all[i].textContent || '').trim().toUpperCase();
-      if (t === 'TOTAL ALERTS'){
-        var sib = all[i].nextElementSibling;
-        if (sib){
-          var n = parseInt(sib.textContent, 10);
-          if (isNaN(n) || n < 1) sib.textContent = '1';
-        }
         return;
       }
     }
@@ -253,46 +235,46 @@
     }
 
     if (!isAlert){
-      if (localStorage.getItem(ROBOT_KEY) === '1'){ stopLoop(); removeStopPanel(); }
+      if (localStorage.getItem(ROBOT_KEY) === '1'){ stopLoop(); hideRobot(); }
       clearHL();
       return;
     }
 
-    // On Alert section
     if (!inc || inc.status !== 'DETECTED' || !inc.cause || !inc.cause.scenario){
       clearHL();
       return;
     }
 
     setLastScenario(inc.cause.scenario);
-    bumpTotalAlerts();
-
-    // Glow the scenario card
     var card = findScenarioCard(inc.cause.scenario);
     if (card) glow(card, inc.cause.confidence, inc.cause.scenario);
 
-    // Auto-click the card and loop — once per incident
-    if (inc.id !== lastHandledId && card){
+    // auto-show robot + start voice loop once per incident
+    if (inc.id !== lastHandledId){
       lastHandledId = inc.id;
       setTimeout(function(){
-        if (onAlert() && card.isConnected){
-          startLoop(card, inc.cause.scenario);
+        if (onAlert()){
+          showRobot(inc.cause.scenario, inc.cause.confidence);
+          startLoop(inc.cause.scenario, inc.cause.confidence);
         }
       }, 400);
-    } else if (localStorage.getItem(ROBOT_KEY) === '1' && !document.getElementById('oceaneyeRobotPanel')){
-      buildStopPanel(inc.cause.scenario);
+    } else {
+      // re-show if removed but loop still active
+      if (localStorage.getItem(ROBOT_KEY) === '1' && !document.getElementById('oceaneyeRobotAvatar')){
+        showRobot(inc.cause.scenario, inc.cause.confidence);
+      }
     }
   }
 
   function subscribe(){
     if (!window.OceanEye || !window.OceanEye.incident) return setTimeout(subscribe, 500);
     window.OceanEye.incident.subscribe(function(){ setTimeout(tick, 100); });
-    console.log('[alert-auto v6] subscribed');
+    console.log('[alert-auto v7] subscribed');
   }
 
   setInterval(tick, 1500);
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', subscribe);
   else subscribe();
-  console.log('[alert-auto v6] armed');
+  console.log('[alert-auto v7] armed');
 })();

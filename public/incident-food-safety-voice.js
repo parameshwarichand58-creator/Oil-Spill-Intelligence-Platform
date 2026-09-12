@@ -45,17 +45,17 @@
 
     var wrap = document.createElement('div');
     wrap.id = 'oeFoodSafetyVoice';
-    wrap.style.cssText = 'display:flex;gap:8px;margin-top:10px;';
+    wrap.style.cssText = 'display:flex;gap:10px;margin-top:12px;justify-content:center;align-items:center;';
 
     var startBtn = document.createElement('button');
     startBtn.type = 'button';
     startBtn.textContent = '\u25B6 START VOICE ALERT';
-    startBtn.style.cssText = "flex:1;padding:9px 12px;background:rgba(255,71,87,0.12);border:1px solid rgba(255,71,87,0.55);color:#ff4757;border-radius:3px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;";
+    startBtn.style.cssText = "padding:9px 20px;background:rgba(255,71,87,0.12);border:1px solid rgba(255,71,87,0.55);color:#ff4757;border-radius:3px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;";
 
     var stopBtn = document.createElement('button');
     stopBtn.type = 'button';
     stopBtn.textContent = '\u23F9 STOP';
-    stopBtn.style.cssText = "flex:0 0 90px;padding:9px 12px;background:rgba(92,114,134,0.12);border:1px solid rgba(92,114,134,0.4);color:#5c7286;border-radius:3px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;";
+    stopBtn.style.cssText = "padding:9px 20px;background:rgba(92,114,134,0.12);border:1px solid rgba(92,114,134,0.4);color:#5c7286;border-radius:3px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;";
 
     startBtn.onclick = function(ev){
       ev.stopPropagation();
