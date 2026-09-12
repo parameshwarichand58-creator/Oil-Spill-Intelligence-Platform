@@ -1,0 +1,5 @@
+/* hide old map remnants */
+.leaflet-control-zoom { z-index: 1 !important; }
+#oceaneyeRealMapWrap .leaflet-control-zoom { z-index: 1100 !important; }
+/* hide any leftover simulated-map zoom controls that aren't inside our wrap */
+.leaflet-container:not(#oceaneyeRealMapBody) .leaflet-control-zoom { display: none !important; }

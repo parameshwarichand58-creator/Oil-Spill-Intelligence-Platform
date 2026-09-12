@@ -113,7 +113,7 @@
     orig.style.display = 'none';
     orig.parentNode.insertBefore(wrap, orig.nextSibling);
 
-    bigMap = window.L.map(box, { zoomControl: true, attributionControl: false })
+    bigMap = window.L.map(box, { zoomControl: true, attributionControl: false }); window.oceaneyeBigMap = bigMap;
       .setView([22.41, 88.46], 7);
 
     window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
