@@ -17,9 +17,11 @@
   }
 
   function isVisible(el){
-    if (!el || el.offsetParent === null) return false;
+    // CSS may hide the old map (display:none), so check dimensions OR tag as hidden
+    if (!el) return false;
+    if (el.offsetParent === null) return true; // hidden by CSS -> still valid target
     var r = el.getBoundingClientRect();
-    return r.width > 150 && r.height > 150;
+    return r.width > 100 && r.height > 100;
   }
 
   function inMapSection(el){
@@ -177,7 +179,7 @@
     box.style.cssText = 'width:100%;height:100%;';
     wrap.appendChild(box);
 
-    orig.style.display = 'none';
+    orig.style.display = 'none'; orig.setAttribute('data-oceaneye-hidden','1');
     orig.parentNode.insertBefore(wrap, orig.nextSibling);
 
     bigMap = window.L.map(box, { zoomControl: true, attributionControl: false });

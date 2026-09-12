@@ -1,6 +1,13 @@
-/* Remove old simulated map everywhere, immediately */
+/* Hide ALL old simulated leaflet maps */
 .leaflet-container { display: none !important; }
 
-/* Our real map is the only one allowed to be visible */
-#oceaneyeRealMapBody.leaflet-container { display: block !important; }
+/* Exception: our real map body and everything inside it */
+#oceaneyeRealMapBody,
+#oceaneyeRealMapBody.leaflet-container,
+#oceaneyeRealMapBody .leaflet-container { display: block !important; }
+
+/* The wrap stays block */
 #oceaneyeRealMapWrap { display: block !important; }
+
+/* Keep our overlays visible (they are divs, not leaflet-containers) */
+#oceaneyeAttrPanel, #oceaneyeSpillCard, #oceaneyeMapToolbar { display: block !important; }
