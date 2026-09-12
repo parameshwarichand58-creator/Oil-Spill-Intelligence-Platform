@@ -1,0 +1,6 @@
+/* Remove old simulated map everywhere, immediately */
+.leaflet-container { display: none !important; }
+
+/* Our real map is the only one allowed to be visible */
+#oceaneyeRealMapBody.leaflet-container { display: block !important; }
+#oceaneyeRealMapWrap { display: block !important; }
