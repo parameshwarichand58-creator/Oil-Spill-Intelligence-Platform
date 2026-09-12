@@ -44,6 +44,14 @@
   // Expose for incident-alert-auto.js
   window.oceaneyeVoice = {
     speakOnce: speakOnce,
+    showPanel: function(){
+      var p = document.getElementById('voiceAlertPanel');
+      if (p) p.style.display = 'flex';
+    },
+    hidePanel: function(){
+      var p = document.getElementById('voiceAlertPanel');
+      if (p) p.style.display = 'none';
+    },
     startLoop: function(msg){
       voiceEnabled = true;
       loopMsg = msg || '';
@@ -75,7 +83,7 @@
         'position:fixed','bottom:12px','right:12px','z-index:9998',
         'display:flex','gap:6px','padding:6px',
         'background:rgba(6,20,32,0.92)',
-        'border:1px solid rgba(0,212,170,0.45)','border-radius:4px'
+        'border:1px solid rgba(0,212,170,0.45)','border-radius:4px','display:none'
       ].join(';');
       document.body.appendChild(panel);
     }

@@ -9,21 +9,34 @@
   var lastStartAttempt = 0;
 
   function isOnSatelliteSection(){
-    var nodes = document.querySelectorAll('h1,h2,h3,h4,div,span');
+    var nodes = document.querySelectorAll('h1,h2,h3,h4');
     for (var i=0;i<nodes.length;i++){
-      var t = (nodes[i].textContent || '').trim();
-      if (t === 'Satellite Analysis') return true;
-      if (t === 'Satellite Status') return true;
+      var el = nodes[i];
+      var t = (el.textContent || '').trim();
+      if (t === 'Satellite Analysis' || t === 'Satellite Status'){
+        if (el.offsetParent !== null) return true;
+      }
     }
     return false;
   }
 
   function isOnAlertSection(){
-    var nodes = document.querySelectorAll('h1,h2,h3,h4,div,span,p');
+    var nodes = document.querySelectorAll('h1,h2,h3,h4');
     for (var i=0;i<nodes.length;i++){
-      var t = (nodes[i].textContent || '').trim();
-      if (t === 'Select Scenario') return true;
-      if (t === 'Alert System') return true;
+      var el = nodes[i];
+      var t = (el.textContent || '').trim();
+      if (t === 'Alert System' || t === 'Select Scenario'){
+        if (el.offsetParent !== null) return true;
+      }
+    }
+    // fallback: scan for any visible element matching
+    var all = document.querySelectorAll('div,span,p');
+    for (var j=0;j<all.length;j++){
+      var e2 = all[j];
+      var t2 = (e2.textContent || '').trim();
+      if ((t2 === 'Select Scenario' || t2 === 'Alert System') && e2.offsetParent !== null){
+        return true;
+      }
     }
     return false;
   }
@@ -164,11 +177,24 @@
 
   // --- Dispatch ---
   function handle(inc){
-    if (!inc || inc.status !== 'DETECTED') return;
-    if (!inc.cause || !inc.cause.scenario) return;
+    var onAlert = isOnAlertSection();
+    var onSat   = isOnSatelliteSection();
 
-    // On Alert section: highlight + start loop
-    if (isOnAlertSection()){
+    // Voice panel visibility
+    if (window.oceaneyeVoice && window.oceaneyeVoice.showPanel){
+      if (onAlert) window.oceaneyeVoice.showPanel();
+      else window.oceaneyeVoice.hidePanel();
+    }
+
+    // Satellite banner
+    if (onSat && inc && inc.status === 'DETECTED'){
+      showSatelliteBanner(inc);
+    } else {
+      clearSatelliteBanner();
+    }
+
+    // Alert section: highlight + loop
+    if (onAlert && inc && inc.status === 'DETECTED' && inc.cause && inc.cause.scenario){
       highlightScenario(inc.cause.scenario, inc.cause.confidence);
       addRecentAlert(inc);
       if (inc.id !== lastHandledId){
@@ -176,24 +202,14 @@
         startAlertLoop(inc);
       }
     } else {
-      // not on alert: clear highlight
       clearHighlight();
     }
 
-    // On Satellite section: show visual banner only
-    if (isOnSatelliteSection()){
-      showSatelliteBanner(inc);
-    } else {
-      clearSatelliteBanner();
-    }
-
-    // Anywhere else: stop voice loop if user left the alert section
-    if (!isOnAlertSection()){
-      var wasOn = window.oceaneyeVoice && window.oceaneyeVoice.isOn && window.oceaneyeVoice.isOn();
-      if (wasOn){
-        // only stop if the user is not on the alert section
-        // (voice-alert may have been started manually; but we auto-loop only here)
-        // We'll leave manual start alone — only stop the auto loop
+    // If user left the alert page, stop the auto-loop
+    if (!onAlert){
+      if (window.oceaneyeVoice && window.oceaneyeVoice.isOn && window.oceaneyeVoice.isOn()){
+        window.oceaneyeVoice.stopAll();
+        console.log('[alert-auto] left alert section — stopped loop');
       }
     }
   }
