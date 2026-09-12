@@ -26,7 +26,7 @@
     el.classList.add('oceaneye-scenario-hl');
     el.style.outline = '2px solid #4a9eff';
     el.style.boxShadow = '0 0 18px rgba(74,158,255,0.55)';
-    if (!el.querySelector('.oceaneye-ai-tag')){
+    var existing = el.querySelectorAll('.oceaneye-ai-tag'); for (var z=0; z<existing.length; z++){ existing[z].parentNode.removeChild(existing[z]); } if (!el.querySelector('.oceaneye-ai-tag')){
       var tag = document.createElement('span');
       tag.className = 'oceaneye-ai-tag';
       tag.style.cssText = 'display:block;margin-top:6px;font-family:"Share Tech Mono",monospace;font-size:9px;letter-spacing:0.10em;color:#4a9eff;text-transform:uppercase;';
@@ -75,7 +75,7 @@
     for (var m=0;m<hits.length;m++) if (merged.indexOf(hits[m]) === -1) merged.push(hits[m]);
     for (var n=0;n<leaves.length;n++) if (merged.indexOf(leaves[n]) === -1) merged.push(leaves[n]);
 
-    for (var j=0;j<merged.length;j++) applyGlow(merged[j], conf);
+    for (var j=0;j<merged.length;j++) applyGlow(merged[j], conf); console.log('[alert-auto] applied glow to', merged.length, 'elements');
     console.log('[alert-auto] highlighted', merged.length, 'elements for', label);
     return merged.length;
   }

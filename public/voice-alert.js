@@ -64,7 +64,28 @@
     if (window.speechSynthesis) window.speechSynthesis.cancel();
   }
 
-  function readActionText(){
+  function buildFullMessage(){
+  var parts = [];
+
+  // 1. Scenario announcement (from incident store)
+  try {
+    if (window.OceanEye && window.OceanEye.incident){
+      var inc = window.OceanEye.incident.get();
+      if (inc && inc.status === 'DETECTED' && inc.cause && inc.cause.scenario){
+        parts.push('Alert. ' + inc.cause.scenario + ' detected.');
+        if (inc.cause.confidence) parts.push('Confidence ' + inc.cause.confidence + ' percent.');
+      }
+    }
+  } catch(e){}
+
+  // 2. Recommended action text
+  var action = '';
+  try { action = readActionText(); } catch(e){}
+  if (action) parts.push(action);
+
+  return parts.join(' ');
+}
+function readActionText(){
   try {
     // Priority 1: find the block that contains "RECOMMENDED ACTION"
     var all = document.querySelectorAll('div, section, article, p, span');
@@ -139,7 +160,7 @@
       ev.stopPropagation();
       unlock();
       voiceEnabled = true;
-      var msg = readActionText() || ALERT_TEXT;
+      var msg = buildFullMessage() || readActionText() || ALERT_TEXT;
       speak(msg);
       startBtn.textContent = '🔊 VOICE ALERT: ON';
       startBtn.style.background = 'rgba(0,212,170,0.12)';
