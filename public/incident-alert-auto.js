@@ -1,38 +1,14 @@
-/* OCEAN EYE - Auto Alert: scenario highlight + auto-voice ring
-   - Auto-highlights the AI-inferred scenario on the Alert page
-   - Auto-starts the voice alert (clicks the existing START button)
-   - Voice loops until STOP is clicked (handled by voice-alert.js)
-   - If you navigate to another page, the first click resumes the ring
-   - Manual scenario buttons stay clickable (untouched)
+/* OCEAN EYE - Auto Alert (v2)
+   - Highlights ALL matching scenario cards (Alert section AND Map)
+   - Highlights "Last Scenario" text
+   - Adds entry to Recent Alerts list
+   - Auto-starts voice alert (clicks existing START button)
+   - Loops until STOP; resumes on next page gesture
 */
 (function(){
   'use strict';
   var lastHandledId = null;
   var VOICE_FLAG_KEY = 'oceaneye.voiceRinging';
-
-  function findScenarioCard(key){
-    var rx = {
-      collision: /collision/i,
-      theft:     /theft|culprit/i,
-      seepage:   /natural seepage/i,
-      weather:   /weather|storm/i,
-      internal:  /internal failure/i,
-      fire:      /fire|explosion/i
-    }[key] || /./;
-    var all = document.querySelectorAll('div, button, li, article');
-    var best = null;
-    for (var i=0;i<all.length;i++){
-      var el = all[i];
-      if (el.id && el.id.indexOf('oceaneye') === 0) continue;
-      if (el.closest && el.closest('#oceaneyeAlertToast')) continue;
-      var t = (el.textContent || '').trim();
-      if (!t || t.length > 220) continue;
-      if (rx.test(t)){
-        if (!best || t.length < (best.textContent||'').length) best = el;
-      }
-    }
-    return best;
-  }
 
   function clearHighlight(){
     var all = document.querySelectorAll('.oceaneye-scenario-hl');
@@ -45,20 +21,63 @@
     }
   }
 
+  function applyGlow(el, conf){
+    if (el.classList.contains('oceaneye-scenario-hl')) return;
+    el.classList.add('oceaneye-scenario-hl');
+    el.style.outline = '2px solid #4a9eff';
+    el.style.boxShadow = '0 0 18px rgba(74,158,255,0.55)';
+    if (!el.querySelector('.oceaneye-ai-tag')){
+      var tag = document.createElement('span');
+      tag.className = 'oceaneye-ai-tag';
+      tag.style.cssText = 'display:block;margin-top:6px;font-family:"Share Tech Mono",monospace;font-size:9px;letter-spacing:0.10em;color:#4a9eff;text-transform:uppercase;';
+      tag.textContent = '\u25C9 AI SELECTED \u00B7 ' + (conf || '--') + '%';
+      el.appendChild(tag);
+    }
+  }
+
   function highlightScenario(key, label, conf){
     clearHighlight();
-    var card = findScenarioCard(key);
-    if (!card) return false;
-    card.classList.add('oceaneye-scenario-hl');
-    card.style.outline = '2px solid #4a9eff';
-    card.style.boxShadow = '0 0 18px rgba(74,158,255,0.55)';
-    if (card.style.borderColor !== undefined) card.style.borderColor = '#4a9eff';
-    var tag = document.createElement('div');
-    tag.className = 'oceaneye-ai-tag';
-    tag.style.cssText = 'margin-top:6px;font-family:"Share Tech Mono",monospace;font-size:9px;letter-spacing:0.10em;color:#4a9eff;text-transform:uppercase;';
-    tag.textContent = '\u25C9 AI SELECTED \u00b7 ' + (conf || '--') + '%';
-    card.appendChild(tag);
-    return true;
+    if (!label) return 0;
+
+    var needle = label.toLowerCase().trim();
+    var hits = [];
+
+    // 1) Explicit selectors (in case cards have known classes)
+    var explicit = document.querySelectorAll(
+      '[data-scenario], .scenario-card, .scenario-btn, .scenario-option, .threat-card, .threat-btn'
+    );
+    for (var e=0; e<explicit.length; e++){
+      var et = (explicit[e].textContent || '').toLowerCase();
+      if (et.indexOf(needle) >= 0) hits.push(explicit[e]);
+    }
+
+    // 2) Generic search across whole DOM
+    var all = document.querySelectorAll('div, button, li, article, section');
+    var generic = [];
+    for (var i=0;i<all.length;i++){
+      var el = all[i];
+      if (el.id && el.id.indexOf('oceaneye') === 0) continue;
+      if (el.closest && el.closest('#oceaneyeAlertToast')) continue;
+      if (el.closest && el.closest('#oceaneyeRealMapWrap')) continue;
+      if (el.closest && el.closest('#oceaneyeReviewCase')) continue;
+      var txt = (el.textContent || '').trim();
+      if (txt.length === 0 || txt.length > 220) continue;
+      if (txt.toLowerCase().indexOf(needle) >= 0) generic.push(el);
+    }
+
+    // keep smallest of generics (leaf-level elements only)
+    var leaves = generic.filter(function(el){
+      return !generic.some(function(o){ return o !== el && el.contains(o); });
+    });
+
+    // merge + dedupe
+    var merged = [];
+    for (var m=0;m<hits.length;m++) if (merged.indexOf(hits[m]) === -1) merged.push(hits[m]);
+    for (var n=0;n<leaves.length;n++) if (merged.indexOf(leaves[n]) === -1) merged.push(leaves[n]);
+
+    for (var j=0;j<merged.length;j++) applyGlow(merged[j], conf);
+    console.log('[alert-auto] highlighted', merged.length, 'elements for', label);
+    return merged.length;
   }
 
   function updateLastScenario(label){
@@ -83,7 +102,6 @@
   }
 
   function addRecentAlert(inc){
-    // try common containers first
     var list = document.querySelector('#recentAlertsList, .recent-alerts-list, [data-recent-alerts], #recent-alerts');
     if (!list){
       var heads = document.querySelectorAll('h1,h2,h3,h4');
@@ -97,10 +115,7 @@
         }
       }
     }
-    if (!list){
-      // last resort: the alert page container
-      list = document.querySelector('.alert-list, .alerts-list');
-    }
+    if (!list) list = document.querySelector('.alert-list, .alerts-list');
     if (!list) return false;
     if (list.querySelector('[data-incident="' + inc.id + '"]')) return true;
 
@@ -122,7 +137,7 @@
     var btn = document.getElementById('voiceAlertStart');
     if (!btn) return false;
     var txt = (btn.textContent || '').toLowerCase();
-    if (txt.indexOf('voice alert: on') >= 0) return true;   // already on
+    if (txt.indexOf('voice alert: on') >= 0) return true;
     try {
       btn.click();
       localStorage.setItem(VOICE_FLAG_KEY, '1');
@@ -131,28 +146,25 @@
     } catch(e){ return false; }
   }
 
-  // if user clicked anywhere on a new page and the ring was supposed to be active,
-  // resume it (needed because browsers require a user gesture per page)
   function resumeVoiceOnGesture(){
     if (localStorage.getItem(VOICE_FLAG_KEY) !== '1') return;
     var btn = document.getElementById('voiceAlertStart');
     if (!btn) return;
     var txt = (btn.textContent || '').toLowerCase();
     if (txt.indexOf('voice alert: on') >= 0) return;
-    try { btn.click(); console.log('[alert-auto] voice resumed after gesture'); } catch(e){}
+    try { btn.click(); console.log('[alert-auto] voice resumed'); } catch(e){}
   }
   ['click','keydown','touchstart'].forEach(function(evt){
-    window.addEventListener(evt, resumeVoiceOnGesture, { once: false, passive: true });
+    window.addEventListener(evt, resumeVoiceOnGesture, { passive: true });
   });
 
-  // watch STOP — clear the "ringing" flag when user stops
   setInterval(function(){
     var btn = document.getElementById('voiceAlertStop');
     if (btn && !btn.__wired){
       btn.__wired = true;
       btn.addEventListener('click', function(){
         localStorage.removeItem(VOICE_FLAG_KEY);
-        console.log('[alert-auto] STOP clicked — flag cleared');
+        console.log('[alert-auto] STOP — flag cleared');
       });
     }
   }, 1500);
@@ -169,10 +181,7 @@
     if (inc.id === lastHandledId) return;
     lastHandledId = inc.id;
 
-    if (fresh){
-      // small delay so Alert page / scenario buttons are visible if user is there
-      setTimeout(startVoice, 500);
-    }
+    if (fresh) setTimeout(startVoice, 500);
     console.log('[alert-auto] handled', inc.id, '->', inc.cause.scenario, 'fresh:', fresh);
   }
 
@@ -182,18 +191,19 @@
     console.log('[alert-auto] subscribed');
   }
 
-  // periodic: reapply highlight if user navigates to Alert page later
+  // Re-apply glow whenever user navigates and the highlight is missing
   setInterval(function(){
     var inc = window.OceanEye && window.OceanEye.incident && window.OceanEye.incident.get();
-    if (!inc || !inc.cause) return;
-    if (!document.querySelector('.oceaneye-scenario-hl')){
+    if (!inc || !inc.cause || !inc.cause.scenario) return;
+    var current = document.querySelector('.oceaneye-scenario-hl');
+    if (!current){
       highlightScenario(inc.cause.key || 'collision', inc.cause.scenario, inc.cause.confidence);
     }
     updateLastScenario(inc.cause.scenario);
     addRecentAlert(inc);
-  }, 2500);
+  }, 1200);
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', subscribe);
   else subscribe();
-  console.log('[alert-auto] armed');
+  console.log('[alert-auto v2] armed');
 })();
