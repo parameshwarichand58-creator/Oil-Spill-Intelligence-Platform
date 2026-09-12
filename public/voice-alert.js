@@ -64,40 +64,34 @@
     if (window.speechSynthesis) window.speechSynthesis.cancel();
   }
 
-  function buildIncidentMessage(){
+  function readActionText(){
   try {
-    if (window.OceanEye && window.OceanEye.incident){
-      var inc = window.OceanEye.incident.get();
-      if (inc && inc.status === 'DETECTED'){
-        var det = inc.detection || {};
-        var cause = inc.cause || {};
-        var parts = [];
-        parts.push('Warning. An oil spill has been detected.');
-        if (cause.scenario) {
-          parts.push('Possible cause: ' + cause.scenario +
-            (cause.confidence ? ', ' + cause.confidence + ' percent confidence.' : '.'));
-        }
-        if (det.confidence) parts.push('Detection confidence ' + det.confidence + ' percent.');
-        if (det.area_km2) parts.push('Spill area approximately ' + det.area_km2 + ' square kilometers.');
-        if (det.lat !== null && det.lon !== null) {
-          parts.push('Location latitude ' + det.lat + ', longitude ' + det.lon + '.');
-        }
-        parts.push('Candidate vessel MT Sagar, attribution 87 percent.');
-        parts.push('The fishing areas must be closed immediately.');
-        parts.push('Food safety teams need to be deployed to test the fish P A H levels.');
-        return parts.join(' ');
+    // Priority 1: find the block that contains "RECOMMENDED ACTION"
+    var all = document.querySelectorAll('div, section, article, p, span');
+    for (var i=0;i<all.length;i++){
+      var el = all[i];
+      var t = (el.textContent || '').trim();
+      if (t.length < 30 || t.length > 800) continue;
+      var upper = t.toUpperCase();
+      if (upper.indexOf('RECOMMENDED ACTION') >= 0){
+        // Strip the "RECOMMENDED ACTION" label from the spoken text
+        var spoken = t.replace(/RECOMMENDED ACTION/i, '').trim();
+        if (spoken.length > 20) return spoken;
       }
     }
+    // Priority 2: the block that contains "IMMEDIATE CLOSURE"
+    for (var j=0;j<all.length;j++){
+      var el2 = all[j];
+      var t2 = (el2.textContent || '').trim();
+      if (t2.length < 30 || t2.length > 800) continue;
+      if (t2.toUpperCase().indexOf('IMMEDIATE CLOSURE') >= 0) return t2;
+    }
   } catch(e){}
-  return null;
+  // Priority 3: legacy fallback selectors
+  var legacy = document.querySelector('#recommendedAction, .recommended-action, [data-action]');
+  if (legacy && legacy.textContent.trim()) return legacy.textContent.trim();
+  return '';
 }
-function readActionText(){
-    var el = document.getElementById('fsAction');
-    if (!el) return null;
-    var t = (el.textContent || '').trim();
-    if (!t || t === '—' || t.length < 5) return null;
-    return t;
-  }
 
   function unlock(){
     if (unlocked) return;
@@ -145,7 +139,7 @@ function readActionText(){
       ev.stopPropagation();
       unlock();
       voiceEnabled = true;
-      var msg = buildIncidentMessage() || readActionText() || ALERT_TEXT;
+      var msg = readActionText() || ALERT_TEXT;
       speak(msg);
       startBtn.textContent = '🔊 VOICE ALERT: ON';
       startBtn.style.background = 'rgba(0,212,170,0.12)';
