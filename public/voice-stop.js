@@ -9,7 +9,7 @@
   var STOP_CLASS = 'oeStopVoiceBtn';
 
   function stopAllVoice(){
-    try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch(e){}
+    window.speechSynthesis.cancel();
     if (window.oceaneyeVoice && window.oceaneyeVoice.stopAll){
       try { window.oceaneyeVoice.stopAll(); } catch(e){}
     }
@@ -73,4 +73,3 @@
 
   console.log('[voice-stop] armed');
 })();
-
