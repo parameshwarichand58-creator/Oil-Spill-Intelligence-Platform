@@ -271,7 +271,6 @@
       eco.textContent = '⏳ SENDING...';
       var text = buildAlertText();
       showToast(text);
-      speakSection3();
       postDispatch(text).then(function(res){
         var ts = new Date().toLocaleTimeString();
         var last = $id(LAST);
@@ -333,3 +332,4 @@
 
   console.log('[dispatch-alert] armed');
 })();
+
