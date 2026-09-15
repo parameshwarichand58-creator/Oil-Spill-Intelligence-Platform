@@ -27,15 +27,19 @@
         var el = all[i];
         var t = (el.textContent || '').trim();
         if (t.length < 30 || t.length > 800) continue;
-        if (t.toUpperCase().indexOf('RECOMMENDED ACTION') >= 0){
-          var s = t.replace(/RECOMMENDED ACTION/i, '').trim();
-          if (s.length > 20) return s;
+        var idx = t.toUpperCase().indexOf('RECOMMENDED ACTION');
+        if (idx >= 0){
+          var after = t.slice(idx + 'RECOMMENDED ACTION'.length).trim();
+          after = after.split(/[\u{1F500}-\u{1F6FF}\u23F9\n]|\s{3,}/u)[0].trim();
+          if (after.length > 20 && after.length < 400) return after;
         }
       }
       for (var j=0;j<all.length;j++){
         var t2 = (all[j].textContent || '').trim();
         if (t2.length >= 30 && t2.length <= 800 && t2.toUpperCase().indexOf('IMMEDIATE CLOSURE') >= 0){
-          return t2;
+          var k = t2.toUpperCase().indexOf('IMMEDIATE CLOSURE');
+          var only = t2.slice(k).split(/[\u{1F500}-\u{1F6FF}\u23F9\n]|\s{3,}/u)[0].trim();
+          if (only.length > 20 && only.length < 400) return only;
         }
       }
     } catch(e){}
