@@ -158,13 +158,6 @@
     t.textContent = text;
     document.body.appendChild(t);
 
-    var stopBtn = document.createElement('button');
-    stopBtn.textContent = extraStopFor === 'emergency' ? '⏹ STOP EMERGENCY ALERT' : '⏹ STOP ECO ALERT';
-    stopBtn.style.cssText = 'margin-top:10px;margin-right:8px;padding:6px 14px;background:transparent;border:1px solid #5c7286;color:#cbd5e1;border-radius:3px;cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:0.1em;';
-    stopBtn.onclick = function(){ try { window.speechSynthesis.cancel(); } catch(e){} };
-    t.appendChild(document.createElement('br'));
-    t.appendChild(stopBtn);
-
     var close = document.createElement('button');
     close.textContent = 'CLOSE';
     close.style.cssText = 'margin-top:10px;padding:6px 14px;background:transparent;border:1px solid #ff4757;color:#ff4757;border-radius:3px;cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:0.1em;';
@@ -340,3 +333,4 @@
 
   console.log('[dispatch-alert] armed');
 })();
+
