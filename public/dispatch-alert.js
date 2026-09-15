@@ -1,8 +1,8 @@
 /* OCEAN EYE — Dispatch Alert
-   Mounts SEND ECO-PROTECTION ALERT next to the existing emergency dispatch button.
-   Adds a dedicated STOP button for BOTH alerts.
-   5-section alert: Cleanup / Marine Life / Food Safety / Boom / Medical.
-   POSTs to the Render relay at /api/dispatch.
+   Two alerts, each with its own STOP button placed right next to its SEND.
+   Emergency alert: existing button — we add a paired STOP beside it.
+   Eco alert: new button + paired STOP beside it.
+   Full 5-section alert. POSTs to Render /api/dispatch.
 */
 (function(){
   'use strict';
@@ -141,7 +141,7 @@
     return L.join('\n');
   }
 
-  function showToast(text){
+  function showToast(text, extraStopFor){
     var old = document.getElementById('oeDispatchToast');
     if (old) old.parentNode.removeChild(old);
     var t = document.createElement('div');
@@ -159,7 +159,7 @@
     document.body.appendChild(t);
 
     var stopBtn = document.createElement('button');
-    stopBtn.textContent = '⏹ STOP VOICE';
+    stopBtn.textContent = extraStopFor === 'emergency' ? '⏹ STOP EMERGENCY ALERT' : '⏹ STOP ECO ALERT';
     stopBtn.style.cssText = 'margin-top:10px;margin-right:8px;padding:6px 14px;background:transparent;border:1px solid #5c7286;color:#cbd5e1;border-radius:3px;cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:0.1em;';
     stopBtn.onclick = function(){ try { window.speechSynthesis.cancel(); } catch(e){} };
     t.appendChild(document.createElement('br'));
@@ -209,7 +209,7 @@
     var b = document.createElement('button');
     b.id = id;
     b.textContent = label;
-    b.style.cssText = 'padding:10px 18px;background:' + bg + ';color:#fff;border:none;border-radius:4px;cursor:pointer;font-family:"Share Tech Mono",monospace;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;margin-right:8px;margin-top:8px;';
+    b.style.cssText = 'padding:10px 16px;background:' + bg + ';color:#fff;border:none;border-radius:4px;cursor:pointer;font-family:"Share Tech Mono",monospace;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;';
     return b;
   }
 
@@ -222,10 +222,40 @@
     return null;
   }
 
+  function pairStopWithButton(sendBtn, stopId, stopLabel, onStop){
+    if (!sendBtn || $id(stopId)) return;
+    // Wrap the send button and stop button in a flex row
+    var parent = sendBtn.parentNode;
+    if (!parent) return;
+
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0;';
+
+    parent.insertBefore(row, sendBtn);
+    row.appendChild(sendBtn);
+
+    var stop = makeBtn(stopId, stopLabel, 'linear-gradient(135deg,#5c7286,#2d3a48)');
+    stop.onclick = function(ev){
+      ev.preventDefault();
+      ev.stopPropagation();
+      onStop();
+    };
+    row.appendChild(stop);
+  }
+
   function mountBlock(){
     var emergency = findEmergencyButton();
 
-    // build our block
+    // Pair STOP with the existing emergency dispatch button
+    if (emergency){
+      pairStopWithButton(emergency, STOP_EMG, '⏹ STOP EMERGENCY ALERT', function(){
+        try { window.speechSynthesis.cancel(); } catch(e){}
+      });
+    }
+
+    // Mount the eco block once
+    if ($id('oeEcoBlock')) return;
+
     var wrap = document.createElement('div');
     wrap.id = 'oeEcoBlock';
     wrap.style.cssText = 'margin:16px 0;padding:14px 16px;background:rgba(255,71,87,0.06);border:1px solid rgba(255,71,87,0.35);border-radius:6px;';
@@ -235,76 +265,68 @@
     title.textContent = '🚨 EMERGENCY DISPATCH — RESPONDER AGENCIES';
     wrap.appendChild(title);
 
-    // STOP for existing emergency dispatch button (separate STOP)
-    if (emergency && !$id(STOP_EMG)){
-      var stopEmg = makeBtn(STOP_EMG, '⏹ STOP EMERGENCY ALERT', 'linear-gradient(135deg,#5c7286,#2d3a48)');
-      stopEmg.onclick = function(ev){
-        ev.preventDefault(); ev.stopPropagation();
-        try { window.speechSynthesis.cancel(); } catch(e){}
-      };
-      // insert right after emergency button if not already
-      if (emergency.parentNode && !emergency.parentNode.querySelector('#'+STOP_EMG)){
-        emergency.parentNode.insertBefore(stopEmg, emergency.nextSibling);
+    // Row: SEND ECO + STOP ECO
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0;';
+
+    var eco = makeBtn(BTN_ECO, '🚨 SEND ECO-PROTECTION ALERT', 'linear-gradient(135deg,#ff4757,#c81e2e)');
+    eco.onclick = function(){
+      eco.disabled = true;
+      eco.textContent = '⏳ SENDING...';
+      var text = buildAlertText();
+      showToast(text, 'eco');
+      speakSection3();
+      postDispatch(text).then(function(res){
+        var ts = new Date().toLocaleTimeString();
+        var last = $id(LAST);
+        if (last) last.textContent = 'Last sent: ' + ts + (res && res.id ? ' · ' + res.id : '');
+        eco.disabled = false;
+        eco.textContent = '🚨 SEND ECO-PROTECTION ALERT';
+      }).catch(function(){
+        eco.disabled = false;
+        eco.textContent = '🚨 SEND ECO-PROTECTION ALERT';
+      });
+    };
+    row.appendChild(eco);
+
+    var stopEco = makeBtn(STOP_ECO, '⏹ STOP ECO ALERT', 'linear-gradient(135deg,#5c7286,#2d3a48)');
+    stopEco.onclick = function(ev){
+      ev.preventDefault(); ev.stopPropagation();
+      try { window.speechSynthesis.cancel(); } catch(e){}
+      if (window.oceaneyeVoice && window.oceaneyeVoice.stopAll){
+        try { window.oceaneyeVoice.stopAll(); } catch(e){}
       }
-    }
+    };
+    row.appendChild(stopEco);
 
-    // SEND ECO button
-    if (!$id(BTN_ECO)){
-      var eco = makeBtn(BTN_ECO, '🚨 SEND ECO-PROTECTION ALERT', 'linear-gradient(135deg,#ff4757,#c81e2e)');
-      eco.onclick = function(){
-        eco.disabled = true;
-        eco.textContent = '⏳ SENDING...';
-        var text = buildAlertText();
-        showToast(text);
-        speakSection3();
-        postDispatch(text).then(function(res){
-          var ts = new Date().toLocaleTimeString();
-          var last = $id(LAST);
-          if (last) last.textContent = 'Last sent: ' + ts + (res && res.id ? ' · ' + res.id : '');
-          eco.disabled = false;
-          eco.textContent = '🚨 SEND ECO-PROTECTION ALERT';
-        }).catch(function(){
-          eco.disabled = false;
-          eco.textContent = '🚨 SEND ECO-PROTECTION ALERT';
-        });
-      };
-      wrap.appendChild(eco);
+    wrap.appendChild(row);
 
-      // STOP for eco alert (separate STOP)
-      var stopEco = makeBtn(STOP_ECO, '⏹ STOP ECO ALERT', 'linear-gradient(135deg,#5c7286,#2d3a48)');
-      stopEco.onclick = function(ev){
-        ev.preventDefault(); ev.stopPropagation();
-        try { window.speechSynthesis.cancel(); } catch(e){}
-        if (window.oceaneyeVoice && window.oceaneyeVoice.stopAll){
-          try { window.oceaneyeVoice.stopAll(); } catch(e){}
-        }
-      };
-      wrap.appendChild(stopEco);
+    var chkWrap = document.createElement('label');
+    chkWrap.style.cssText = 'display:block;margin-top:10px;font-family:"Share Tech Mono",monospace;font-size:11px;color:#cbd5e1;cursor:pointer;';
+    var chk = document.createElement('input');
+    chk.type = 'checkbox';
+    chk.id = CHK;
+    chk.style.cssText = 'margin-right:8px;vertical-align:middle;';
+    chkWrap.appendChild(chk);
+    chkWrap.appendChild(document.createTextNode('Fish already caught from affected zone (hold from market until tested)'));
+    wrap.appendChild(chkWrap);
 
-      // checkbox
-      var chkWrap = document.createElement('label');
-      chkWrap.style.cssText = 'display:block;margin-top:12px;font-family:"Share Tech Mono",monospace;font-size:11px;color:#cbd5e1;cursor:pointer;';
-      var chk = document.createElement('input');
-      chk.type = 'checkbox';
-      chk.id = CHK;
-      chk.style.cssText = 'margin-right:8px;vertical-align:middle;';
-      chkWrap.appendChild(chk);
-      chkWrap.appendChild(document.createTextNode('Fish already caught from affected zone (hold from market until tested)'));
-      wrap.appendChild(chkWrap);
+    var last = document.createElement('div');
+    last.id = LAST;
+    last.style.cssText = 'margin-top:8px;font-family:"Share Tech Mono",monospace;font-size:10px;color:#5c7286;';
+    last.textContent = 'Last sent: —';
+    wrap.appendChild(last);
 
-      var last = document.createElement('div');
-      last.id = LAST;
-      last.style.cssText = 'margin-top:10px;font-family:"Share Tech Mono",monospace;font-size:10px;color:#5c7286;';
-      last.textContent = 'Last sent: —';
-      wrap.appendChild(last);
-    }
-
-    // Mount
-    if (emergency && emergency.parentNode && !$id('oeEcoBlock')){
-      emergency.parentNode.insertBefore(wrap, emergency.nextSibling);
-    } else if (!emergency && !$id('oeEcoBlock')){
+    if (emergency && emergency.parentNode){
+      var emgRow = emergency.closest('div');
+      if (emgRow && emgRow.parentNode) {
+        emgRow.parentNode.insertBefore(wrap, emgRow.nextSibling);
+      } else {
+        emergency.parentNode.appendChild(wrap);
+      }
+    } else {
       var fallback = document.querySelector('#page9, [data-page="dispatch"]');
-      if (fallback) fallback.insertBefore(wrap, fallback.firstChild);
+      if (fallback) fallback.appendChild(wrap);
     }
   }
 
