@@ -3,3 +3,7 @@ node_modules/
 .DS_Store
 *.log
 ocean-eye.html
+.env
+relay.log
+relay.err
+relay.js.bak*
