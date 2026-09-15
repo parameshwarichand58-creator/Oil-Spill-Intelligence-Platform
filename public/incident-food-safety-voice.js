@@ -1,105 +1,83 @@
-/* OCEAN EYE - Food Safety Voice Buttons
+/* OCEAN EYE — Food Safety Voice
    Injects START / STOP buttons under the RECOMMENDED ACTION text.
-   START says the recommended-action line. STOP silences.
+   Speaks ONLY the hardcoded 3 sentences. Never reads the DOM.
 */
 (function(){
   'use strict';
 
   var TEXT = 'IMMEDIATE CLOSURE of all downstream fishing zones. Public health advisory to coastal communities. Deploy seafood testing teams within 12 hours.';
+  var loopTimer = null;
+  var voiceEnabled = false;
 
-  function readAction(){
+  function speakOnce(){
     try {
-      var all = document.querySelectorAll('div, section, article, p');
-      for (var i=0;i<all.length;i++){
-        var t = (all[i].textContent || '').trim();
-        if (t.length < 30 || t.length > 800) continue;
-        if (t.toUpperCase().indexOf('RECOMMENDED ACTION') >= 0){
-          var s = t.replace(/RECOMMENDED ACTION/i, '').trim();
-          if (s.length > 20) return s;
-        }
-      }
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(TEXT);
+      u.rate = 0.95; u.pitch = 1.0; u.volume = 1.0;
+      window.speechSynthesis.speak(u);
     } catch(e){}
-    return TEXT;
   }
 
-  function findRecommendedAnchor(){
-    var all = document.querySelectorAll('div, section, article, p');
+  function start(){
+    voiceEnabled = true;
+    speakOnce();
+    if (loopTimer) clearInterval(loopTimer);
+    loopTimer = setInterval(function(){
+      if (!voiceEnabled){ clearInterval(loopTimer); loopTimer = null; return; }
+      speakOnce();
+    }, 9000);
+  }
+
+  function stop(){
+    voiceEnabled = false;
+    if (loopTimer){ clearInterval(loopTimer); loopTimer = null; }
+    try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch(e){}
+  }
+
+  function inject(){
+    // Find the RECOMMENDED ACTION label
+    var all = document.querySelectorAll('div, span, p');
+    var label = null;
     for (var i=0;i<all.length;i++){
-      var el = all[i];
-      var t = (el.textContent || '').trim();
-      if (t.length < 30 || t.length > 800) continue;
-      if (t.toUpperCase().indexOf('RECOMMENDED ACTION') >= 0){
-        // return a leaf-ish element
-        var kids = el.querySelectorAll('div, p, span');
-        return el;
-      }
+      var t = (all[i].textContent || '').trim().toUpperCase();
+      if (t === 'RECOMMENDED ACTION'){ label = all[i]; break; }
     }
-    return null;
-  }
+    if (!label) return;
 
-  function build(){
-    if (document.getElementById('oeFoodSafetyVoice')) return;
-    var anchor = findRecommendedAnchor();
-    if (!anchor) return;
-    if (anchor.offsetParent === null) return;
+    if (document.getElementById('oeFsaStart')) return;
 
-    var wrap = document.createElement('div');
-    wrap.id = 'oeFoodSafetyVoice';
-    wrap.style.cssText = 'display:flex;gap:10px;margin-top:12px;justify-content:center;align-items:center;';
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;margin-top:8px;';
 
     var startBtn = document.createElement('button');
-    startBtn.type = 'button';
-    startBtn.textContent = '\u25B6 START VOICE ALERT';
-    startBtn.style.cssText = "padding:9px 20px;background:rgba(255,71,87,0.12);border:1px solid rgba(255,71,87,0.55);color:#ff4757;border-radius:3px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;";
+    startBtn.id = 'oeFsaStart';
+    startBtn.textContent = '▶ START VOICE ALERT';
+    startBtn.style.cssText = 'padding:6px 14px;background:linear-gradient(135deg,#22d37f,#059669);color:#fff;border:none;border-radius:4px;cursor:pointer;font-family:"Share Tech Mono",monospace;font-size:11px;letter-spacing:0.1em;font-weight:700;';
+    startBtn.onclick = function(ev){ ev.preventDefault(); ev.stopPropagation(); start(); };
 
     var stopBtn = document.createElement('button');
-    stopBtn.type = 'button';
-    stopBtn.textContent = '\u23F9 STOP';
-    stopBtn.style.cssText = "padding:9px 20px;background:rgba(92,114,134,0.12);border:1px solid rgba(92,114,134,0.4);color:#5c7286;border-radius:3px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;";
+    stopBtn.id = 'oeFsaStop';
+    stopBtn.textContent = '⏹ STOP';
+    stopBtn.style.cssText = 'padding:6px 14px;background:linear-gradient(135deg,#5c7286,#2d3a48);color:#fff;border:none;border-radius:4px;cursor:pointer;font-family:"Share Tech Mono",monospace;font-size:11px;letter-spacing:0.1em;font-weight:700;';
+    stopBtn.onclick = function(ev){ ev.preventDefault(); ev.stopPropagation(); stop(); };
 
-    startBtn.onclick = function(ev){
-      ev.stopPropagation();
-      var msg = readAction();
-      if (window.oceaneyeVoice && window.oceaneyeVoice.startLoop){
-        window.oceaneyeVoice.startLoop(msg, 9000);
-      }
-      startBtn.textContent = '\uD83D\uDD0A VOICE ALERT: ON';
-      startBtn.style.background = 'rgba(0,212,170,0.12)';
-      startBtn.style.borderColor = 'rgba(0,212,170,0.55)';
-      startBtn.style.color = '#00d4aa';
-      stopBtn.style.background = 'rgba(255,71,87,0.15)';
-      stopBtn.style.borderColor = 'rgba(255,71,87,0.55)';
-      stopBtn.style.color = '#ff4757';
-      console.log('[food-safety] START — speaking recommended action');
-    };
+    row.appendChild(startBtn);
+    row.appendChild(stopBtn);
 
-    stopBtn.onclick = function(ev){
-      ev.stopPropagation();
-      if (window.oceaneyeVoice && window.oceaneyeVoice.stopAll) window.oceaneyeVoice.stopAll();
-      startBtn.textContent = '\u25B6 START VOICE ALERT';
-      startBtn.style.background = 'rgba(255,71,87,0.12)';
-      startBtn.style.borderColor = 'rgba(255,71,87,0.55)';
-      startBtn.style.color = '#ff4757';
-      stopBtn.style.background = 'rgba(92,114,134,0.12)';
-      stopBtn.style.borderColor = 'rgba(92,114,134,0.4)';
-      stopBtn.style.color = '#5c7286';
-      console.log('[food-safety] STOP');
-    };
-
-    wrap.appendChild(startBtn);
-    wrap.appendChild(stopBtn);
-    anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
-    console.log('[food-safety] buttons inserted');
+    // insert right after the label
+    if (label.parentNode){
+      label.parentNode.insertBefore(row, label.nextSibling);
+    }
   }
 
-  function loop(){
-    build();
-    // don't re-insert if already present
+  function boot(){
+    inject();
+    setInterval(inject, 1500);
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(loop, 400); });
-  else setTimeout(loop, 400);
-  setInterval(loop, 2000);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
 
-  console.log('[food-safety] armed');
+  console.log('[food-safety] armed — speaks only the recommended action text');
 })();
