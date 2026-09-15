@@ -1,7 +1,5 @@
 /* OCEAN EYE — Dispatch Alert
-   Two alerts, each with its own STOP button placed right next to its SEND.
-   Emergency alert: existing button — we add a paired STOP beside it.
-   Eco alert: new button + paired STOP beside it.
+   Two alerts, each with its own STOP button that fully kills voice + loop.
    Full 5-section alert. POSTs to Render /api/dispatch.
 */
 (function(){
@@ -19,6 +17,16 @@
   function safe(fn, fb){
     try { var v = fn(); return (v === undefined || v === null) ? fb : v; }
     catch(e){ return fb; }
+  }
+
+  function stopAllVoice(){
+    try { window.speechSynthesis.cancel(); } catch(e){}
+    if (window.oceaneyeVoice && window.oceaneyeVoice.stopAll){
+      try { window.oceaneyeVoice.stopAll(); } catch(e){}
+    }
+    setTimeout(function(){ try { window.speechSynthesis.cancel(); } catch(e){} }, 100);
+    setTimeout(function(){ try { window.speechSynthesis.cancel(); } catch(e){} }, 500);
+    console.log('[dispatch-alert] voice stopped');
   }
 
   function getIncident(){
@@ -141,7 +149,7 @@
     return L.join('\n');
   }
 
-  function showToast(text, extraStopFor){
+  function showToast(text){
     var old = document.getElementById('oeDispatchToast');
     if (old) old.parentNode.removeChild(old);
     var t = document.createElement('div');
@@ -162,6 +170,7 @@
     close.textContent = 'CLOSE';
     close.style.cssText = 'margin-top:10px;padding:6px 14px;background:transparent;border:1px solid #ff4757;color:#ff4757;border-radius:3px;cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:0.1em;';
     close.onclick = function(){ t.parentNode.removeChild(t); };
+    t.appendChild(document.createElement('br'));
     t.appendChild(close);
 
     setTimeout(function(){ if (t.parentNode) t.parentNode.removeChild(t); }, 60000);
@@ -215,9 +224,8 @@
     return null;
   }
 
-  function pairStopWithButton(sendBtn, stopId, stopLabel, onStop){
+  function pairStopWithButton(sendBtn, stopId, stopLabel){
     if (!sendBtn || $id(stopId)) return;
-    // Wrap the send button and stop button in a flex row
     var parent = sendBtn.parentNode;
     if (!parent) return;
 
@@ -231,7 +239,7 @@
     stop.onclick = function(ev){
       ev.preventDefault();
       ev.stopPropagation();
-      onStop();
+      stopAllVoice();
     };
     row.appendChild(stop);
   }
@@ -239,14 +247,10 @@
   function mountBlock(){
     var emergency = findEmergencyButton();
 
-    // Pair STOP with the existing emergency dispatch button
     if (emergency){
-      pairStopWithButton(emergency, STOP_EMG, '⏹ STOP EMERGENCY ALERT', function(){
-        try { window.speechSynthesis.cancel(); } catch(e){}
-      });
+      pairStopWithButton(emergency, STOP_EMG, '⏹ STOP EMERGENCY ALERT');
     }
 
-    // Mount the eco block once
     if ($id('oeEcoBlock')) return;
 
     var wrap = document.createElement('div');
@@ -258,7 +262,6 @@
     title.textContent = '🚨 EMERGENCY DISPATCH — RESPONDER AGENCIES';
     wrap.appendChild(title);
 
-    // Row: SEND ECO + STOP ECO
     var row = document.createElement('div');
     row.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0;';
 
@@ -267,7 +270,7 @@
       eco.disabled = true;
       eco.textContent = '⏳ SENDING...';
       var text = buildAlertText();
-      showToast(text, 'eco');
+      showToast(text);
       speakSection3();
       postDispatch(text).then(function(res){
         var ts = new Date().toLocaleTimeString();
@@ -285,10 +288,7 @@
     var stopEco = makeBtn(STOP_ECO, '⏹ STOP ECO ALERT', 'linear-gradient(135deg,#5c7286,#2d3a48)');
     stopEco.onclick = function(ev){
       ev.preventDefault(); ev.stopPropagation();
-      try { window.speechSynthesis.cancel(); } catch(e){}
-      if (window.oceaneyeVoice && window.oceaneyeVoice.stopAll){
-        try { window.oceaneyeVoice.stopAll(); } catch(e){}
-      }
+      stopAllVoice();
     };
     row.appendChild(stopEco);
 
@@ -333,4 +333,3 @@
 
   console.log('[dispatch-alert] armed');
 })();
-
