@@ -1,11 +1,7 @@
 // Ocean Eye — AIS relay
-// Sources: AISStream (primary, live), VoyageRadar (optional), PocketWorld (fallback)
-// Honest coverage: AISStream is coastal-only (terrestrial receivers). No open-ocean coverage.
-
 const http = require('http');
 const { WebSocketServer, WebSocket } = require('ws');
 
-// --- Config ---
 const AISSTREAM_URL  = 'wss://stream.aisstream.io/v0/stream';
 const AISSTREAM_KEY  = process.env.AISSTREAM_API_KEY;
 
@@ -16,22 +12,36 @@ const CERULEAN_BASE  = 'https://api.cerulean.skytruth.org';
 const POCKETWORLD_URL = 'https://pocketworld.org/api/ships';
 
 const PORT        = process.env.PORT || 3004;
-const POLL_MS     = 300000;   // VoyageRadar poll every 5 min
-const DENSITY_MS  = 5000;     // broadcast every 5 s
+const POLL_MS     = 300000;
+const DENSITY_MS  = 5000;
 
-// Bay of Bengal / Indian Ocean
 const BBOX = { swLat: 5.0, swLng: 78.0, neLat: 23.0, neLng: 95.0 };
 
-// --- State ---
 const vessels = new Map();
 let lastDensity = 0;
 let vrBroken = false;
 let aisStreamConnected = false;
 
-// --- HTTP + WS server ---
+const dispatches = [];
+
+function readBody(req){
+  return new Promise((resolve) => {
+    let chunks = '';
+    req.on('data', c => chunks += c);
+    req.on('end', () => resolve(chunks));
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Content-Type', 'application/json');
+
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204;
+    return res.end();
+  }
 
   if (req.url === '/' || req.url === '/health') {
     return res.end(JSON.stringify({
@@ -46,6 +56,34 @@ const server = http.createServer(async (req, res) => {
       coverage: vessels.size > 0 ? 'coastal' : 'none',
       uptime: process.uptime()
     }));
+  }
+
+  if (req.method === 'POST' && req.url === '/api/dispatch') {
+    try {
+      const body = await readBody(req);
+      const parsed = JSON.parse(body || '{}');
+      const entry = {
+        id: 'DSP-' + Date.now(),
+        receivedAt: new Date().toISOString(),
+        incidentId: parsed.incidentId || null,
+        severity: parsed.severity || null,
+        lat: parsed.lat || null,
+        lon: parsed.lon || null,
+        message: parsed.message || '',
+        harvestStatus: parsed.harvestStatus || 'none'
+      };
+      dispatches.push(entry);
+      if (dispatches.length > 50) dispatches.shift();
+      console.log('[dispatch] received', entry.id, 'for incident', entry.incidentId);
+      return res.end(JSON.stringify({ ok: true, id: entry.id, receivedAt: entry.receivedAt }));
+    } catch (e) {
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ ok: false, error: e.message }));
+    }
+  }
+
+  if (req.method === 'GET' && req.url === '/api/dispatch') {
+    return res.end(JSON.stringify({ ok: true, count: dispatches.length, dispatches }));
   }
 
   if (req.url.startsWith('/api/cerulean')) {
@@ -70,7 +108,6 @@ function broadcast(msg) {
   wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(s); });
 }
 
-// --- AISStream (primary, live WebSocket) ---
 function connectAISStream() {
   if (!AISSTREAM_KEY) {
     console.warn('[aisstream] API key missing — skipping');
@@ -91,18 +128,15 @@ function connectAISStream() {
   socket.on('message', (data) => {
     try {
       const msg = JSON.parse(data.toString());
-
       if (msg.MessageType === 'SubscriptionConfirmation') {
         console.log('[aisstream] subscription confirmed');
         return;
       }
       if (msg.MessageType !== 'PositionReport') return;
-
       const p    = msg.Message.PositionReport;
       const meta = msg.MetaData || {};
       const mmsi = String(p.UserID);
       if (!mmsi) return;
-
       vessels.set(mmsi, {
         mmsi,
         name: (meta.ShipName || '').trim() || `MMSI ${mmsi}`,
@@ -131,7 +165,6 @@ function connectAISStream() {
   });
 }
 
-// --- VoyageRadar (optional REST) ---
 async function pollVoyageRadar() {
   if (!VR_KEY) return false;
   try {
@@ -149,7 +182,6 @@ async function pollVoyageRadar() {
       const coords = f.geometry?.coordinates || [];
       const mmsi = String(p.mmsi || '');
       if (!mmsi || coords.length < 2) return;
-      // don't overwrite fresh AISStream data
       const existing = vessels.get(mmsi);
       if (existing && Date.now() - existing.ts < 30000) return;
       vessels.set(mmsi, {
@@ -169,7 +201,6 @@ async function pollVoyageRadar() {
   }
 }
 
-// --- PocketWorld (fallback, no key) ---
 async function pollPocketWorld() {
   try {
     const r = await fetch(POCKETWORLD_URL);
@@ -179,7 +210,6 @@ async function pollPocketWorld() {
     ships.forEach(s => {
       const mmsi = String(s.mmsi || s.MMSI || '');
       if (!mmsi) return;
-      // don't overwrite fresh AISStream or VR data
       const existing = vessels.get(mmsi);
       if (existing && Date.now() - existing.ts < 30000) return;
       vessels.set(mmsi, {
@@ -197,13 +227,11 @@ async function pollPocketWorld() {
   }
 }
 
-// --- Broadcast loop ---
 function broadcastSnapshot() {
   broadcast({ type: 'snapshot', vessels: [...vessels.values()], ts: Date.now() });
 }
 
 function computeDensity() {
-  // crude density: sampling up to 30 vessels, measuring "usage" proxy for demo
   const sample = [...vessels.values()].slice(0, 30);
   if (!sample.length) { lastDensity = 0; return; }
   const avg = sample.reduce((a, v) => a + (v.speed || 0), 0) / sample.length;
@@ -212,7 +240,6 @@ function computeDensity() {
   broadcast({ type: 'density', value: lastDensity, ts: Date.now() });
 }
 
-// --- Startup ---
 server.listen(PORT, () => {
   console.log(`Relay listening on port ${PORT}`);
   console.log(`  AISStream:   ${AISSTREAM_KEY ? 'configured (live)' : 'no key'}`);
