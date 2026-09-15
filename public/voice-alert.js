@@ -1,7 +1,6 @@
-/* OCEAN EYE - Voice Alert (original behavior)
-   - START button in Food Safety panel -> speaks recommended action, loops
-   - STOP button -> silences
-   - Nothing auto-triggers
+/* OCEAN EYE - Voice Alert
+   START button in Food Safety panel -> speaks ONLY the recommended action text.
+   STOP silences. Nothing auto-triggers.
 */
 (function(){
   'use strict';
@@ -20,40 +19,14 @@
     } catch(e){}
   }
 
-  function readActionText(){
-    try {
-      var all = document.querySelectorAll('div, section, article, p');
-      for (var i=0;i<all.length;i++){
-        var el = all[i];
-        var t = (el.textContent || '').trim();
-        if (t.length < 30 || t.length > 800) continue;
-        var idx = t.toUpperCase().indexOf('RECOMMENDED ACTION');
-        if (idx >= 0){
-          var after = t.slice(idx + 'RECOMMENDED ACTION'.length).trim();
-          after = after.split(/[\u{1F500}-\u{1F6FF}\u23F9\n]|\s{3,}/u)[0].trim();
-          if (after.length > 20 && after.length < 400) return after;
-        }
-      }
-      for (var j=0;j<all.length;j++){
-        var t2 = (all[j].textContent || '').trim();
-        if (t2.length >= 30 && t2.length <= 800 && t2.toUpperCase().indexOf('IMMEDIATE CLOSURE') >= 0){
-          var k = t2.toUpperCase().indexOf('IMMEDIATE CLOSURE');
-          var only = t2.slice(k).split(/[\u{1F500}-\u{1F6FF}\u23F9\n]|\s{3,}/u)[0].trim();
-          if (only.length > 20 && only.length < 400) return only;
-        }
-      }
-    } catch(e){}
-    return '';
-  }
-
   function start(){
     voiceEnabled = true;
-    var msg = readActionText() || ALERT_TEXT;
-    speakOnce(msg);
+    // Always speak ONLY the hardcoded recommended-action text. Never read the DOM.
+    speakOnce(ALERT_TEXT);
     if (loopTimer) clearInterval(loopTimer);
     loopTimer = setInterval(function(){
       if (!voiceEnabled){ clearInterval(loopTimer); loopTimer = null; return; }
-      speakOnce(msg);
+      speakOnce(ALERT_TEXT);
     }, 9000);
   }
 
@@ -72,5 +45,5 @@
     isOn: function(){ return voiceEnabled; }
   };
 
-  console.log('[voice] armed — manual START/STOP only');
+  console.log('[voice] armed — speaks only the recommended action text');
 })();
