@@ -77,7 +77,7 @@
     { needles: ['success','uptime'],                                            kind: 'SIM' },
     { needles: ['coverage','aoi coverage'],                                     kind: 'SIM' },
     { needles: ['average response','response time','mttr','mttd'],              kind: 'SIM' },
-    { needles: ['ships','vessels'],                                             kind: 'SIM' },
+    { needles: ['ships','vessels'],                                             kind: 'SIM' }, // upgraded to LIVE if relay confirms AIS connected
     { needles: ['alerts'],                                                      kind: 'SIM' },
     { needles: ['risk'],                                                        kind: 'MODEL' },
     { needles: ['scenario'],                                                    kind: 'MODEL' },
@@ -85,11 +85,38 @@
     { needles: ['archived','replay'],                                           kind: 'ARCHIVED' }
   ];
 
+  // --- Live AIS status (fetched from Render relay /health) ---
+  var AIS_LIVE = false;
+  var AIS_RELAY_URL = 'https://oil-spill-intelligence-platform.onrender.com/health';
+
+  function refreshAisStatus(){
+    fetch(AIS_RELAY_URL)
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(j){
+        if (!j) return;
+        var connected = j.sources && j.sources.aisstream === 'connected';
+        var hasVessels = (j.vessels || 0) > 0;
+        var wasLive = AIS_LIVE;
+        AIS_LIVE = connected && hasVessels;
+        if (AIS_LIVE !== wasLive){
+          console.log('[provenance] AIS live =', AIS_LIVE, j);
+          // remove existing badges so they re-render with new kind
+          document.querySelectorAll('.oceaneye-prov').forEach(function(b){ b.remove(); });
+        }
+      })
+      .catch(function(e){ console.warn('[provenance] AIS health fetch failed:', e.message); });
+  }
+
+  function effectiveKind(entry){
+    if (entry.needles.indexOf('ships') !== -1 && AIS_LIVE) return 'LIVE';
+    return entry.kind;
+  }
+
   function apply(){
     for (var i=0;i<MAP.length;i++){
       var entry = MAP[i];
       var el = findLabel(entry.needles);
-      if (el) badge(el, entry.kind);
+      if (el) badge(el, effectiveKind(entry));
     }
   }
 
@@ -99,6 +126,10 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(loop, 500); });
   else setTimeout(loop, 500);
+
+  // refresh live status now and every 30s
+  refreshAisStatus();
+  setInterval(refreshAisStatus, 30000);
 
   // re-apply when sections are (re)rendered
   setInterval(loop, 2500);

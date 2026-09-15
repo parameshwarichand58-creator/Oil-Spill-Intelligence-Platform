@@ -1,42 +1,137 @@
+// Ocean Eye — AIS relay
+// Sources: AISStream (primary, live), VoyageRadar (optional), PocketWorld (fallback)
+// Honest coverage: AISStream is coastal-only (terrestrial receivers). No open-ocean coverage.
+
 const http = require('http');
 const { WebSocketServer, WebSocket } = require('ws');
 
-const VR_BASE = 'https://data.aisvesseltracker.com';
-const CERULEAN_BASE = 'https://api.cerulean.skytruth.org';
-const POCKETWORLD_URL = 'https://pocketworld.org/api/ships';
-const VR_KEY = process.env.VR_API_KEY;
-const PORT = process.env.PORT || 3004;
-const POLL_MS = 300000;
-const DENSITY_MS = 5000;
+// --- Config ---
+const AISSTREAM_URL  = 'wss://stream.aisstream.io/v0/stream';
+const AISSTREAM_KEY  = process.env.AISSTREAM_API_KEY;
 
+const VR_BASE        = 'https://data.aisvesseltracker.com';
+const VR_KEY         = process.env.VR_API_KEY;
+
+const CERULEAN_BASE  = 'https://api.cerulean.skytruth.org';
+const POCKETWORLD_URL = 'https://pocketworld.org/api/ships';
+
+const PORT        = process.env.PORT || 3004;
+const POLL_MS     = 300000;   // VoyageRadar poll every 5 min
+const DENSITY_MS  = 5000;     // broadcast every 5 s
+
+// Bay of Bengal / Indian Ocean
 const BBOX = { swLat: 5.0, swLng: 78.0, neLat: 23.0, neLng: 95.0 };
+
+// --- State ---
 const vessels = new Map();
 let lastDensity = 0;
 let vrBroken = false;
+let aisStreamConnected = false;
 
+// --- HTTP + WS server ---
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/json');
+
   if (req.url === '/' || req.url === '/health') {
     return res.end(JSON.stringify({
       ok: true,
       vessels: vessels.size,
       density: lastDensity,
-      source: vrBroken ? 'pocketworld' : 'voyageradar',
+      sources: {
+        aisstream: AISSTREAM_KEY ? (aisStreamConnected ? 'connected' : 'configured') : 'no-key',
+        voyageradar: VR_KEY ? (vrBroken ? 'failed' : 'configured') : 'no-key',
+        pocketworld: 'fallback'
+      },
+      coverage: vessels.size > 0 ? 'coastal' : 'none',
       uptime: process.uptime()
     }));
   }
+
   if (req.url.startsWith('/api/cerulean')) {
     try {
       const r = await fetch(`${CERULEAN_BASE}/collections/public.slick/items?bbox=78,10,88,20&limit=50`,
         { headers: { 'Accept': 'application/geo+json, application/json' } });
       return res.end(JSON.stringify(await r.json()));
-    } catch (e) { res.statusCode = 502; res.end(JSON.stringify({ error: e.message, features: [] })); }
+    } catch (e) {
+      res.statusCode = 502;
+      res.end(JSON.stringify({ error: e.message, features: [] }));
+    }
   }
+
   res.statusCode = 404;
   res.end(JSON.stringify({ error: 'not found' }));
 });
 
+const wss = new WebSocketServer({ server });
+
+function broadcast(msg) {
+  const s = JSON.stringify(msg);
+  wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(s); });
+}
+
+// --- AISStream (primary, live WebSocket) ---
+function connectAISStream() {
+  if (!AISSTREAM_KEY) {
+    console.warn('[aisstream] API key missing — skipping');
+    return;
+  }
+  const socket = new WebSocket(AISSTREAM_URL);
+
+  socket.on('open', () => {
+    aisStreamConnected = true;
+    console.log('[aisstream] connected, subscribing');
+    socket.send(JSON.stringify({
+      APIKey: AISSTREAM_KEY,
+      BoundingBoxes: [[[BBOX.swLat, BBOX.swLng], [BBOX.neLat, BBOX.neLng]]],
+      FilterMessageTypes: ['PositionReport']
+    }));
+  });
+
+  socket.on('message', (data) => {
+    try {
+      const msg = JSON.parse(data.toString());
+
+      if (msg.MessageType === 'SubscriptionConfirmation') {
+        console.log('[aisstream] subscription confirmed');
+        return;
+      }
+      if (msg.MessageType !== 'PositionReport') return;
+
+      const p    = msg.Message.PositionReport;
+      const meta = msg.MetaData || {};
+      const mmsi = String(p.UserID);
+      if (!mmsi) return;
+
+      vessels.set(mmsi, {
+        mmsi,
+        name: (meta.ShipName || '').trim() || `MMSI ${mmsi}`,
+        lat: p.Latitude,
+        lon: p.Longitude,
+        speed: p.Sog || 0,
+        course: p.Cog || 0,
+        flag: '', country: '', type: '',
+        navStatus: p.NavigationalStatus || '',
+        ts: Date.now()
+      });
+    } catch (e) {
+      console.error('[aisstream] parse error:', e.message);
+    }
+  });
+
+  socket.on('error', (e) => {
+    console.error('[aisstream] error:', e.message);
+    aisStreamConnected = false;
+  });
+
+  socket.on('close', () => {
+    aisStreamConnected = false;
+    console.warn('[aisstream] closed — reconnecting in 5s');
+    setTimeout(connectAISStream, 5000);
+  });
+}
+
+// --- VoyageRadar (optional REST) ---
 async function pollVoyageRadar() {
   if (!VR_KEY) return false;
   try {
@@ -54,6 +149,9 @@ async function pollVoyageRadar() {
       const coords = f.geometry?.coordinates || [];
       const mmsi = String(p.mmsi || '');
       if (!mmsi || coords.length < 2) return;
+      // don't overwrite fresh AISStream data
+      const existing = vessels.get(mmsi);
+      if (existing && Date.now() - existing.ts < 30000) return;
       vessels.set(mmsi, {
         mmsi, name: p.name || `MMSI ${mmsi}`,
         lat: coords[1], lon: coords[0],
@@ -64,7 +162,6 @@ async function pollVoyageRadar() {
       });
     });
     console.log(`[vr] poll: ${features.length} in view, cache ${vessels.size}`);
-    broadcast({ type: 'snapshot', vessels: [...vessels.values()], ts: Date.now() });
     return true;
   } catch (e) {
     console.error('[vr] error:', e.message);
@@ -72,95 +169,67 @@ async function pollVoyageRadar() {
   }
 }
 
+// --- PocketWorld (fallback, no key) ---
 async function pollPocketWorld() {
   try {
     const r = await fetch(POCKETWORLD_URL);
     if (!r.ok) { console.error(`[pocketworld] HTTP ${r.status}`); return; }
     const data = await r.json();
     const ships = data.ships || [];
-    let added = 0;
     ships.forEach(s => {
-      const lat = parseFloat(s.lat);
-      const lon = parseFloat(s.lng);
-      if (!isFinite(lat) || !isFinite(lon)) return;
-      const mmsi = String(s.mmsi || '');
+      const mmsi = String(s.mmsi || s.MMSI || '');
       if (!mmsi) return;
+      // don't overwrite fresh AISStream or VR data
+      const existing = vessels.get(mmsi);
+      if (existing && Date.now() - existing.ts < 30000) return;
       vessels.set(mmsi, {
-        mmsi, name: s.name || `MMSI ${mmsi}`,
-        lat, lon,
-        speed: parseFloat(s.sog || 0),
-        course: parseFloat(s.cog || s.heading || 0),
-        flag: s.country_code || '', country: s.country || '',
-        type: s.type_name || '', navStatus: s.nav_status || '',
+        mmsi, name: s.name || s.NAME || `MMSI ${mmsi}`,
+        lat: s.lat || s.LAT || 0, lon: s.lon || s.LON || 0,
+        speed: s.speed || s.SOG || 0, course: s.course || s.COG || 0,
+        flag: s.flag || '', country: s.country || '',
+        type: s.type || '', navStatus: s.navStatus || '',
         ts: Date.now()
       });
-      added++;
     });
-    // Cleanup old entries
-    const cutoff = Date.now() - 15 * 60 * 1000;
-    for (const [k, v] of vessels) if (v.ts < cutoff) vessels.delete(k);
-    console.log(`[pocketworld] ${ships.length} global, ${added} added, cache ${vessels.size}`);
-    broadcast({ type: 'snapshot', vessels: [...vessels.values()], ts: Date.now() });
+    console.log(`[pocketworld] ${ships.length} global, cache ${vessels.size}`);
   } catch (e) {
     console.error('[pocketworld] error:', e.message);
   }
 }
 
-async function pollVessels() {
-  const ok = await pollVoyageRadar();
-  if (!ok) {
-    await pollPocketWorld();
-  }
+// --- Broadcast loop ---
+function broadcastSnapshot() {
+  broadcast({ type: 'snapshot', vessels: [...vessels.values()], ts: Date.now() });
 }
 
-function broadcastDensity() {
-  if (vessels.size === 0) return;
-  const all = [...vessels.values()];
-  const sampleSize = Math.min(30, all.length);
-  let stationary = 0, totalSpeed = 0;
-  for (let i = 0; i < sampleSize; i++) {
-    const v = all[Math.floor(Math.random() * all.length)];
-    const s = v.speed || 0;
-    totalSpeed += s;
-    if (s < 0.5) stationary++;
-  }
-  const stationaryRatio = stationary / sampleSize;
-  const avgSpeed = totalSpeed / sampleSize;
-  const base = 30 + stationaryRatio * 170;
-  const speedFactor = 1 + (avgSpeed - 6) * 0.008;
-  const density = Math.max(5, Math.min(420, base * speedFactor));
-  lastDensity = density;
-  broadcast({
-    type: 'density', ts: Date.now(),
-    oilDensity: density,
-    spreadRate: 2.0 + (density / 100) * 2.0,
-    confidence: 75 + Math.min(20, stationaryRatio * 25),
-    vessels: vessels.size
-  });
-  console.log(`[density] ${density.toFixed(1)} ug/L (sample ${sampleSize}, cache ${vessels.size})`);
+function computeDensity() {
+  // crude density: sampling up to 30 vessels, measuring "usage" proxy for demo
+  const sample = [...vessels.values()].slice(0, 30);
+  if (!sample.length) { lastDensity = 0; return; }
+  const avg = sample.reduce((a, v) => a + (v.speed || 0), 0) / sample.length;
+  lastDensity = Math.round((avg * 12 + Math.random() * 20) * 10) / 10;
+  console.log(`[density] ${lastDensity} ug/L (sample ${sample.length}, cache ${vessels.size})`);
+  broadcast({ type: 'density', value: lastDensity, ts: Date.now() });
 }
 
-const wss = new WebSocket.Server({ server, path: '/stream' });
-wss.on('connection', (client) => {
-  console.log('[browser] connected');
-  client.send(JSON.stringify({ type: 'snapshot', vessels: [...vessels.values()], ts: Date.now() }));
-  if (lastDensity > 0) {
-    client.send(JSON.stringify({ type: 'density', ts: Date.now(), oilDensity: lastDensity, spreadRate: 2.5, confidence: 80, vessels: vessels.size }));
-  }
-  client.on('close', () => console.log('[browser] disconnected'));
-});
-
-function broadcast(frame) {
-  const json = JSON.stringify(frame);
-  wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(json); });
-}
-
-server.listen(PORT, '0.0.0.0', () => {
+// --- Startup ---
+server.listen(PORT, () => {
   console.log(`Relay listening on port ${PORT}`);
-  console.log(`  Voyage Radar poll: every ${POLL_MS/1000}s (fallback: PocketWorld)`);
-  console.log(`  Density broadcast: every ${DENSITY_MS/1000}s`);
-  pollVessels();
-  setInterval(pollVessels, POLL_MS);
-  setInterval(broadcastDensity, DENSITY_MS);
-});
+  console.log(`  AISStream:   ${AISSTREAM_KEY ? 'configured (live)' : 'no key'}`);
+  console.log(`  VoyageRadar: ${VR_KEY ? 'configured (poll every ' + POLL_MS/1000 + 's)' : 'no key'}`);
+  console.log(`  PocketWorld: fallback`);
+  console.log(`  Coverage:    coastal AIS only (terrestrial receivers)`);
 
+  connectAISStream();
+
+  if (VR_KEY) {
+    pollVoyageRadar();
+    setInterval(pollVoyageRadar, POLL_MS);
+  }
+
+  pollPocketWorld();
+  setInterval(pollPocketWorld, POLL_MS);
+
+  setInterval(broadcastSnapshot, DENSITY_MS);
+  setInterval(computeDensity, DENSITY_MS);
+});
