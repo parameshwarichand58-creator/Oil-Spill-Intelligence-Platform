@@ -1,81 +1,84 @@
-/* OCEAN EYE — Excel Export
-   Adds an "Export Excel" button next to the existing Export CSV / Export JSON.
-   Uses HTML-table-to-.xls trick — Excel opens natively, no library needed.
+/* OCEAN EYE — Excel Export (real .xlsx via SheetJS)
+   Produces a genuine Excel workbook that opens cleanly in Excel / LibreOffice / Google Sheets.
+   No browser warning, no HTML-in-.xls hack.
 */
 (function(){
   'use strict';
 
   var BTN_ID = 'oeExportExcelBtn';
+  var SHEETJS_URL = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+
+  function loadSheetJS(cb){
+    if (window.XLSX) return cb();
+    var s = document.createElement('script');
+    s.src = SHEETJS_URL;
+    s.onload = function(){ cb(); };
+    s.onerror = function(){ console.error('[excel-export] SheetJS failed to load'); };
+    document.head.appendChild(s);
+  }
 
   function getDashboardData(){
-    // Grab whatever is on the dashboard — KPIs, tables, cards
-    var data = {
-      generatedAt: new Date().toISOString(),
-      incident: (window.OceanEye && window.OceanEye.incident && window.OceanEye.incident.get && window.OceanEye.incident.get()) || {},
-      kpis: [],
-      ships: []
+    var d = {
+      generatedAt: new Date().toISOString().replace('T',' ').slice(0,19),
+      incident: {},
+      kpis: []
     };
+    try {
+      d.incident = (window.OceanEye && window.OceanEye.incident && window.OceanEye.incident.get && window.OceanEye.incident.get()) || {};
+    } catch(e){}
     try {
       document.querySelectorAll('.stat-number').forEach(function(el, i){
         var label = el.parentNode && el.parentNode.querySelector('.stat-label');
-        data.kpis.push({
-          metric: label ? label.textContent.trim() : ('KPI ' + (i+1)),
-          value: el.textContent.trim()
+        d.kpis.push({
+          Metric: label ? label.textContent.trim() : ('KPI ' + (i+1)),
+          Value: el.textContent.trim()
         });
       });
     } catch(e){}
-    return data;
+    return d;
   }
 
-  function buildExcelHtml(d){
-    var h = [];
-    h.push('<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"><style>');
-    h.push('td,th{border:1px solid #999;padding:4px 8px;font-family:Arial;font-size:11px;}');
-    h.push('th{background:#0a3a5a;color:#fff;font-weight:bold;}');
-    h.push('h2{font-family:Arial;font-size:14px;color:#0a3a5a;}');
-    h.push('</style></head><body>');
+  function buildWorkbook(){
+    var d = getDashboardData();
+    var wb = XLSX.utils.book_new();
 
-    h.push('<h2>OCEAN EYE — Oil Spill Intelligence Platform</h2>');
-    h.push('<p>Generated: ' + d.generatedAt + '</p>');
+    // Sheet 1 — Overview
+    var overview = [
+      ['OCEAN EYE — Oil Spill Intelligence Platform'],
+      ['Generated', d.generatedAt],
+      [],
+      ['Incident ID',       (d.incident.id || '')],
+      ['Status',            (d.incident.status || '')],
+      ['Latitude',          ((d.incident.detection && d.incident.detection.lat) || '')],
+      ['Longitude',         ((d.incident.detection && d.incident.detection.lon) || '')],
+      ['Area (km²)',        ((d.incident.detection && d.incident.detection.area_km2) || '')],
+      ['Confidence (%)',    ((d.incident.detection && d.incident.detection.confidence) || '')]
+    ];
+    var ws1 = XLSX.utils.aoa_to_sheet(overview);
+    ws1['!cols'] = [{ wch: 20 }, { wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, ws1, 'Overview');
 
-    if (d.incident && d.incident.id){
-      h.push('<h3>Incident</h3><table>');
-      h.push('<tr><th>Field</th><th>Value</th></tr>');
-      h.push('<tr><td>ID</td><td>' + (d.incident.id || '') + '</td></tr>');
-      var det = d.incident.detection || {};
-      h.push('<tr><td>Latitude</td><td>' + (det.lat || '') + '</td></tr>');
-      h.push('<tr><td>Longitude</td><td>' + (det.lon || '') + '</td></tr>');
-      h.push('<tr><td>Area (km²)</td><td>' + (det.area_km2 || '') + '</td></tr>');
-      h.push('<tr><td>Confidence (%)</td><td>' + (det.confidence || '') + '</td></tr>');
-      h.push('<tr><td>Status</td><td>' + (d.incident.status || '') + '</td></tr>');
-      h.push('</table>');
-    }
+    // Sheet 2 — KPIs
+    var kpiRows = [['Metric', 'Value']];
+    d.kpis.forEach(function(k){ kpiRows.push([k.Metric, k.Value]); });
+    var ws2 = XLSX.utils.aoa_to_sheet(kpiRows);
+    ws2['!cols'] = [{ wch: 30 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(wb, ws2, 'KPIs');
 
-    h.push('<h3>Dashboard KPIs</h3><table>');
-    h.push('<tr><th>Metric</th><th>Value</th></tr>');
-    d.kpis.forEach(function(k){
-      h.push('<tr><td>' + k.metric + '</td><td>' + k.value + '</td></tr>');
-    });
-    h.push('</table>');
-
-    h.push('</body></html>');
-    return h.join('');
+    return wb;
   }
 
   function downloadExcel(){
-    var d = getDashboardData();
-    var html = buildExcelHtml(d);
-    var blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    var ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    a.href = url;
-    a.download = 'ocean-eye-report-' + ts + '.xls';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
-    console.log('[excel-export] downloaded');
+    loadSheetJS(function(){
+      if (!window.XLSX){
+        alert('Excel export unavailable — could not load xlsx library. Check your internet connection.');
+        return;
+      }
+      var wb = buildWorkbook();
+      var ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      XLSX.writeFile(wb, 'ocean-eye-report-' + ts + '.xlsx');
+      console.log('[excel-export] downloaded real .xlsx');
+    });
   }
 
   function makeBtn(){
@@ -102,7 +105,6 @@
     if (!csv || !csv.parentNode) return;
     var btn = makeBtn();
     csv.parentNode.insertBefore(btn, csv.nextSibling);
-    console.log('[excel-export] mounted');
   }
 
   function boot(){
@@ -113,5 +115,5 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 
-  console.log('[excel-export] armed');
+  console.log('[excel-export] armed — real .xlsx export');
 })();
